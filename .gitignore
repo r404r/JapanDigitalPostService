@@ -1,0 +1,27 @@
+# Go
+/bin/
+*.exe
+*.test
+*.out
+coverage.*
+
+# 本地数据库 / 下载数据
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.zip
+/data/
+
+# 环境
+.env
+.env.local
+
+# 前端
+web/node_modules/
+web/dist/
+
+# 编辑器 / 系统
+.DS_Store
+.idea/
+.vscode/

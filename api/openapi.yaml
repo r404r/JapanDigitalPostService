@@ -1,0 +1,223 @@
+openapi: 3.0.3
+info:
+  title: JapanDigitalPostService API
+  version: 0.1.0
+  description: >
+    日本邮政地址检索服务。基于 token 认证，提供邮编/都道府県/市区町村/模糊查询，
+    以及同步状态与 token 管理。本契约为 spec-first 源文件，用 oapi-codegen 生成 Go server。
+servers:
+  - url: /v1
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      summary: Liveness/readiness
+      security: []
+      operationId: getHealth
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+  /addresses:
+    get:
+      summary: 地址查询（邮编/都道府県/市区町村/模糊）
+      operationId: searchAddresses
+      parameters:
+        - { name: zipcode, in: query, schema: { type: string }, description: 7 位邮编或前缀 }
+        - { name: prefecture, in: query, schema: { type: string } }
+        - { name: city, in: query, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string }, description: 跨字段模糊关键字 }
+        - { name: limit, in: query, schema: { type: integer, default: 20, maximum: 20 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        '200':
+          description: 查询结果（含 too_many_results / timeout 等状态）
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SearchResult' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '504': { $ref: '#/components/responses/Error' }
+  /addresses/{zipcode}:
+    get:
+      summary: 按邮编精确查询（一个邮编可对应多町域）
+      operationId: getAddressByZipcode
+      parameters:
+        - { name: zipcode, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SearchResult' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /sync/status:
+    get:
+      summary: 当前同步状态
+      operationId: getSyncStatus
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncStatus' }
+  /sync/runs:
+    get:
+      summary: 同步运行历史
+      operationId: listSyncRuns
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 20 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/SyncRun' }
+  /sync/trigger:
+    post:
+      summary: 手动触发同步（admin）
+      operationId: triggerSync
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type: { type: string, enum: [full, diff] }
+              required: [type]
+      responses:
+        '202':
+          description: accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncRun' }
+        '409': { $ref: '#/components/responses/Error' }
+  /tokens:
+    get:
+      summary: 列出 token（脱敏，admin）
+      operationId: listTokens
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/TokenInfo' }
+    post:
+      summary: 发行 token（admin，明文仅返回一次）
+      operationId: createToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                scope: { type: string, enum: [read, admin] }
+              required: [name, scope]
+      responses:
+        '201':
+          description: created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/TokenInfo'
+                  - type: object
+                    properties:
+                      token: { type: string, description: 明文 token，仅此一次返回 }
+  /tokens/{id}:
+    delete:
+      summary: 吊销 token（admin）
+      operationId: revokeToken
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '204': { description: revoked }
+        '404': { $ref: '#/components/responses/Error' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  responses:
+    Error:
+      description: 错误
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    Health:
+      type: object
+      properties:
+        status: { type: string }
+        version: { type: string }
+    Address:
+      type: object
+      properties:
+        zipcode: { type: string }
+        jis_code: { type: string }
+        prefecture: { type: string }
+        prefecture_kana: { type: string }
+        city: { type: string }
+        city_kana: { type: string }
+        town: { type: string }
+        town_kana: { type: string }
+    SearchResult:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, too_many_results, timeout]
+        total_count: { type: integer }
+        returned: { type: integer }
+        truncated: { type: boolean }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Address' }
+    SyncStatus:
+      type: object
+      properties:
+        total_addresses: { type: integer }
+        running: { type: boolean }
+        last_success_at: { type: string, format: date-time, nullable: true }
+        last_type: { type: string, enum: [full, diff], nullable: true }
+    SyncRun:
+      type: object
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [full, diff] }
+        status: { type: string, enum: [running, success, failed] }
+        trigger: { type: string, enum: [schedule, manual] }
+        rows_added: { type: integer }
+        rows_updated: { type: integer }
+        rows_deleted: { type: integer }
+        rows_total: { type: integer }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time, nullable: true }
+        error_message: { type: string, nullable: true }
+    TokenInfo:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        prefix: { type: string }
+        scope: { type: string, enum: [read, admin] }
+        created_at: { type: string, format: date-time }
+        last_used_at: { type: string, format: date-time, nullable: true }
+        revoked_at: { type: string, format: date-time, nullable: true }
+    Error:
+      type: object
+      properties:
+        status: { type: string }
+        message: { type: string }
