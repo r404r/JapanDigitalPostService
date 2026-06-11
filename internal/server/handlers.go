@@ -76,6 +76,7 @@ type handlers struct {
 	reader       domain.AddressReader     // 同步状态的地址计数（CountAll）
 	runs         domain.SyncRunRepository // 同步状态/历史
 	trigger      SyncTrigger              // 手动触发（异步）
+	uploader     SyncUploader             // 手工上传全量同步（同步）
 	queryTimeout time.Duration
 	logger       *slog.Logger
 }

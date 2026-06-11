@@ -6,10 +6,14 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/r404r/JapanDigitalPostService/internal/domain"
+	syncpkg "github.com/r404r/JapanDigitalPostService/internal/sync"
 )
+
+const maxUploadBytes int64 = 64 << 20
 
 // ---- 对外 JSON 形态（snake_case，契约见 api/openapi.yaml）----
 
@@ -164,6 +168,72 @@ func (h *handlers) syncTrigger(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusAccepted, toSyncRunDTO(*run))
+}
+
+// syncUpload handles POST /v1/sync/upload (admin). It accepts one multipart
+// part named "file" containing Japan Post utf_ken_all as .zip or UTF-8 .csv.
+func (h *handlers) syncUpload(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes)
+	if err := r.ParseMultipartForm(maxUploadBytes); err != nil {
+		h.writeStatusError(w, r, http.StatusBadRequest, "invalid_request", "アップロードできるファイルサイズを超えています。")
+		return
+	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		h.writeStatusError(w, r, http.StatusBadRequest, "invalid_request", "file フィールドに zip または csv ファイルを指定してください。")
+		return
+	}
+	defer file.Close()
+
+	name := header.Filename
+	lower := strings.ToLower(name)
+	if !strings.HasSuffix(lower, ".zip") && !strings.HasSuffix(lower, ".csv") {
+		h.writeStatusError(w, r, http.StatusBadRequest, "unsupported_file", "zip または csv ファイルのみアップロードできます。")
+		return
+	}
+
+	data, err := io.ReadAll(io.LimitReader(file, maxUploadBytes+1))
+	if err != nil {
+		h.writeStatusError(w, r, http.StatusBadRequest, "invalid_request", "アップロードファイルを読み取れませんでした。")
+		return
+	}
+	if int64(len(data)) > maxUploadBytes {
+		h.writeStatusError(w, r, http.StatusBadRequest, "invalid_request", "アップロードできるファイルサイズを超えています。")
+		return
+	}
+
+	run, err := h.uploader.UploadFull(r.Context(), name, data)
+	if err != nil {
+		if errors.Is(err, domain.ErrSyncRunning) {
+			h.writeStatusError(w, r, http.StatusConflict, "sync_running", "同期が実行中です。完了後に再度アップロードしてください。")
+			return
+		}
+		status, msg := uploadError(err)
+		code := http.StatusUnprocessableEntity
+		if status == "unsupported_file" {
+			code = http.StatusBadRequest
+		}
+		h.writeStatusError(w, r, code, status, msg)
+		return
+	}
+	writeJSON(w, http.StatusOK, toSyncRunDTO(*run))
+}
+
+func uploadError(err error) (string, string) {
+	switch {
+	case errors.Is(err, syncpkg.ErrUnsupportedUploadFile):
+		return "unsupported_file", "zip または csv ファイルのみアップロードできます。"
+	case errors.Is(err, syncpkg.ErrUploadCSVTooLarge):
+		return "invalid_request", "CSV の展開サイズが上限を超えています。"
+	case errors.Is(err, syncpkg.ErrUploadEncoding):
+		return "csv_format_error", "UTF-8 の utf_ken_all CSV のみ対応しています。Shift-JIS 版は利用できません。"
+	case strings.Contains(err.Error(), "open uploaded zip"):
+		return "unzip_failed", "zip ファイルを解凍できませんでした。日本郵政の utf_ken_all zip を指定してください。"
+	case strings.Contains(err.Error(), "parse full"):
+		return "csv_format_error", "CSV の形式が utf_ken_all と一致しません。"
+	default:
+		return "import_failed", "同期データの取り込みに失敗しました。"
+	}
 }
 
 // writeStatusError 落地统一错误体（spec §7），带 trace id；5xx 同时记服务端日志。

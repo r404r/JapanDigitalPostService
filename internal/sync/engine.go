@@ -1,17 +1,31 @@
 package sync
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"strings"
 	stdsync "sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/r404r/JapanDigitalPostService/internal/domain"
+)
+
+const maxUploadCSVBytes int64 = 128 << 20
+
+var (
+	ErrUnsupportedUploadFile = errors.New("unsupported upload file type")
+	ErrUploadCSVTooLarge     = errors.New("uploaded csv too large")
+	ErrUploadEncoding        = errors.New("uploaded csv must be UTF-8")
 )
 
 // Options 是同步引擎的行为参数（来自 internal/config，docs/architecture.md §9）。
@@ -148,6 +162,39 @@ func (e *Engine) TriggerAsync(reqType domain.SyncType, trigger domain.SyncTrigge
 	return &snapshot, nil
 }
 
+// UploadFull applies an uploaded Japan Post utf_ken_all CSV as a full rebuild.
+// It shares the same DB lock and sync_runs lifecycle as scheduled/manual sync.
+func (e *Engine) UploadFull(ctx context.Context, filename string, data []byte) (*domain.SyncRun, error) {
+	holder := e.holder()
+	release, ok, err := e.locker.Acquire(ctx, holder)
+	if err != nil {
+		return nil, fmt.Errorf("acquire sync lock: %w", err)
+	}
+	if !ok {
+		return nil, domain.ErrSyncRunning
+	}
+	defer func() {
+		if rerr := release(); rerr != nil {
+			e.logger.Error("release sync lock", "err", rerr)
+		}
+	}()
+
+	run, start, err := e.beginRun(ctx, domain.SyncFull, domain.TriggerUpload)
+	if err != nil {
+		return nil, err
+	}
+	run.SourceURL = "upload:" + filename
+	run.FileSize = int64(len(data))
+	sum := sha256.Sum256(data)
+	run.FileChecksum = hex.EncodeToString(sum[:])
+
+	csv, err := uploadCSV(filename, data)
+	if err != nil {
+		return run, e.finishUpload(ctx, run, start, ApplyResult{}, err)
+	}
+	return run, e.executeUpload(ctx, run, start, bytes.NewReader(csv))
+}
+
 // Shutdown 取消 TriggerAsync 启动的后台同步任务，并等待它们退出。用于 server
 // 优雅关闭；cmd/batch 的同步 Run 由调用方传入的 context 控制，不归这里管理。
 func (e *Engine) Shutdown(ctx context.Context) error {
@@ -243,6 +290,72 @@ func (e *Engine) execute(ctx context.Context, run *domain.SyncRun, syncType doma
 		}
 	}
 	return err
+}
+
+func (e *Engine) executeUpload(ctx context.Context, run *domain.SyncRun, start time.Time, csv io.Reader) error {
+	e.logger.Info("sync upload started", "run_id", run.ID, "source", run.SourceURL)
+
+	res, err := ApplyFull(ctx, e.addresses, csv, e.opt.BatchSize, e.opt.FullPrune, e.opt.FullMinRows)
+	return e.finishUpload(ctx, run, start, res, err)
+}
+
+func (e *Engine) finishUpload(ctx context.Context, run *domain.SyncRun, start time.Time, res ApplyResult, err error) error {
+	finished := e.now()
+	run.FinishedAt = &finished
+	run.DurationMs = finished.Sub(start).Milliseconds()
+	run.RowsAdded = res.Added
+	run.RowsUpdated = res.Updated
+	run.RowsDeleted = res.Deleted
+	run.RowsTotal = res.Total
+	if err != nil {
+		run.Status = domain.StatusFailed
+		run.ErrorMessage = err.Error()
+		e.logger.Error("sync upload failed", "run_id", run.ID, "err", err)
+	} else {
+		run.Status = domain.StatusSuccess
+		e.logger.Info("sync upload succeeded", "run_id", run.ID,
+			"added", res.Added, "updated", res.Updated, "deleted", res.Deleted, "total", res.Total)
+	}
+	if uerr := e.runs.Update(ctx, run); uerr != nil {
+		e.logger.Error("update sync upload run", "run_id", run.ID, "err", uerr)
+		if err == nil {
+			err = uerr
+		}
+	}
+	return err
+}
+
+func uploadCSV(filename string, data []byte) ([]byte, error) {
+	ext := strings.ToLower(filepath.Ext(filename))
+	switch ext {
+	case ".csv":
+		if int64(len(data)) > maxUploadCSVBytes {
+			return nil, ErrUploadCSVTooLarge
+		}
+		if !utf8.Valid(data) {
+			return nil, ErrUploadEncoding
+		}
+		return data, nil
+	case ".zip":
+		rc, err := openZipCSVWithLimit(data, maxUploadCSVBytes)
+		if err != nil {
+			return nil, fmt.Errorf("open uploaded zip: %w", err)
+		}
+		defer rc.Close()
+		csv, err := io.ReadAll(io.LimitReader(rc, maxUploadCSVBytes+1))
+		if err != nil {
+			return nil, fmt.Errorf("read uploaded csv: %w", err)
+		}
+		if int64(len(csv)) > maxUploadCSVBytes {
+			return nil, ErrUploadCSVTooLarge
+		}
+		if !utf8.Valid(csv) {
+			return nil, ErrUploadEncoding
+		}
+		return csv, nil
+	default:
+		return nil, ErrUnsupportedUploadFile
+	}
 }
 
 func (e *Engine) runFull(ctx context.Context, run *domain.SyncRun) (ApplyResult, error) {

@@ -42,7 +42,7 @@ export type SyncRun = {
   id: string;
   type: SyncType;
   status: "running" | "success" | "failed";
-  trigger?: "schedule" | "manual";
+  trigger?: "schedule" | "manual" | "upload";
   rows_added?: number;
   rows_updated?: number;
   rows_deleted?: number;

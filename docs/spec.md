@@ -87,8 +87,9 @@
 - `GET /v1/sync/status`：当前数据量、最近一次成功同步时间/类型、是否正在运行。
 - `GET /v1/sync/runs?limit=&offset=`：历史运行记录（`sync_runs`），含类型、状态、计数、耗时、错误。
 - `POST /v1/sync/trigger`（admin）：手动触发，body `{ "type": "auto" | "full" | "diff" }`，返回 run id。`auto` = 库空走 full、否则 diff（引擎按当前地址条数解析）；`full` = 强制全量重建；`diff` = 强制差分。落库的 `SyncRun.type` 始终是 `full` 或 `diff`（`auto` 仅为触发入参，不落库），`202` 返回的运行记录即解析后的真实类型。
+- `POST /v1/sync/upload`（admin）：multipart `file` 上传日本郵政 `utf_ken_all` 的 zip 或解压后的 UTF-8 csv，并按全量同步导入/重建（不做差分）。与 schedule/manual 共用同步锁，运行中返回 `sync_running`/409。`sync_runs.trigger=upload`，`source_url=upload:<filename>`。
 
-> 实现现状：以上三端点已挂载到 `cmd/server`（经 `internal/server.NewRouter` 统一装配）。`GET /v1/sync/status`（`total_addresses`/`running`/`last_success_at`/`last_type`）与 `GET /v1/sync/runs` 需 `read`|`admin`；`POST /v1/sync/trigger` 仅 `admin`，**异步执行**（全量可达分钟级，不占住请求）并立即以 `202` 返回创建的 `running` 运行记录，已有同步在跑时返回 `sync_running`/409。进程内 cron（`SYNC_CRON`）与独立入口 `cmd/batch --type auto|full|diff` 仍可用，与触发端点共用同一引擎与 DB 锁。
+> 实现现状：以上同步端点已挂载到 `cmd/server`（经 `internal/server.NewRouter` 统一装配）。`GET /v1/sync/status`（`total_addresses`/`running`/`last_success_at`/`last_type`）与 `GET /v1/sync/runs` 需 `read`|`admin`；`POST /v1/sync/trigger` 与 `POST /v1/sync/upload` 仅 `admin`。trigger **异步执行**（全量可达分钟级，不占住请求）并立即以 `202` 返回创建的 `running` 运行记录；upload 在请求内完成全量导入并返回完成后的运行记录。已有同步在跑时返回 `sync_running`/409。进程内 cron（`SYNC_CRON`）与独立入口 `cmd/batch --type auto|full|diff` 仍可用，与 HTTP 触发/上传共用同一引擎与 DB 锁。
 > server 优雅关闭时会取消并等待手动触发的后台同步；被 shutdown 取消的运行记录应从 `running` 收敛为 `failed`，错误摘要记录取消原因。
 
 ### 3.5 Token 管理（admin scope）
@@ -113,6 +114,7 @@
 6. 并发：DB 单行锁（`sync_locks`）保证同一时刻仅一个同步在写；并发触发返回 `sync_running`（HTTP 409）。锁含 TTL（2h），持有进程崩溃后可被抢占，避免永久阻塞；释放锁的 DB 操作使用 `SYNC_LOCK_RELEASE_TIMEOUT` 短超时。
 7. 失败：记录 `error_message`，分批写 + 删除走事务，不破坏既有数据，在线查询（读路径）不受影响。server/batch 启动时会把上个进程遗留的 `running` 记录标记为 `failed`，并写入 `finished_at` / `duration_ms` / 安全错误摘要。
 8. 健壮性：下载带单次超时 + 指数退避重试（`DOWNLOAD_*`）、大小校验、zip 完整性校验、记录 checksum/文件大小；DB 连接带超时 + 退避重试，并统一配置连接池限额（`DB_*`）。
+   - 上传全量同步限制 multipart body（64MiB）与 zip 解压后的 CSV（128MiB），避免过大上传与 zip-bomb；仅支持 UTF-8 `utf_ken_all`，Shift-JIS 输入返回日语 `csv_format_error`。
 9. 可扩展：引擎依赖 `domain` repository / `Locker` 接口，无状态，可作为独立 worker 多实例运行；后续替换为 worker/queue 或分布式锁（PG advisory lock）只需换 `Locker` 实现，不改引擎。
 
 ## 5. 认证规格
@@ -233,5 +235,6 @@
 | 2026-06-11 | task-0020 | 修复 Claude Review #3：HTTP server 新增 read-header/read/write/idle timeout 配置并在 `http.Server` 上生效，降低慢连接长期占用风险。无 OpenAPI 变更。 |
 | 2026-06-11 | task-0022 | 修复 Claude Review #7：`sync_locks` release 改用 `SYNC_LOCK_RELEASE_TIMEOUT` 控制的短超时 context，避免 DB 异常时同步 goroutine 无限阻塞。无 OpenAPI 变更。 |
 | 2026-06-11 | task-0023 | 修复 Claude Review #8：cron scheduler 持有可取消 root context，`Stop()` 会取消在跑调度同步并等待 job 退出。无 OpenAPI 变更。 |
+| 2026-06-12 | GHO-42 | 新增 `POST /v1/sync/upload`（admin multipart）：支持日本郵政 `utf_ken_all` zip / UTF-8 csv 上传并按 full 导入；与 schedule/manual 共用同步锁，运行中返回 `sync_running`；`sync_runs.trigger=upload`、`source_url=upload:<filename>`；补充上传大小、zip 解压大小与 UTF-8 限制，以及日语结构化错误。 |
 | 2026-06-11 | task-0024 | 修复 Claude Review #9：`DeleteByKeys` 从单事务逐行 DELETE 改为跨方言可移植的分批批量 DELETE，降低大差分废止文件下的锁持有时间与 round-trip。无 OpenAPI 变更。 |
 | 2026-06-11 | task-0025 | 修复 Claude Review #10：`DeleteNotIn` 改为按 id 分页扫描与分批剪枝，避免长游标跨 DELETE 阶段，并减少一次性 stale id 内存占用。无 OpenAPI 变更。 |

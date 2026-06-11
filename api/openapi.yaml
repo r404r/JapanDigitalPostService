@@ -116,6 +116,33 @@ paths:
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
+  /sync/upload:
+    post:
+      summary: zip/csv アップロードによる全量同期（admin）
+      operationId: uploadSync
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 日本郵政 utf_ken_all の zip、または解凍済み UTF-8 csv。
+              required: [file]
+      responses:
+        '200':
+          description: completed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncRun' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
   /tokens:
     get:
       summary: 列出 token（脱敏，admin scope）
@@ -242,7 +269,7 @@ components:
         id: { type: string }
         type: { type: string, enum: [full, diff] }
         status: { type: string, enum: [running, success, failed] }
-        trigger: { type: string, enum: [schedule, manual] }
+        trigger: { type: string, enum: [schedule, manual, upload] }
         source_url: { type: string, description: 下载来源 URL }
         file_checksum: { type: string, description: 下载 zip 的 SHA-256 }
         file_size: { type: integer, description: 下载 zip 字节数 }
@@ -274,6 +301,6 @@ components:
         status:
           type: string
           description: 机器可读状态码（spec §7）。
-          enum: [too_many_results, timeout, invalid_request, unauthorized, forbidden, not_found, rate_limited, internal_error, sync_running]
+          enum: [too_many_results, timeout, invalid_request, unauthorized, forbidden, not_found, rate_limited, internal_error, sync_running, unsupported_file, unzip_failed, csv_format_error, import_failed]
         message: { type: string, description: 人类可读说明 }
         trace_id: { type: string, description: 关联请求的 X-Request-Id，便于排查 }

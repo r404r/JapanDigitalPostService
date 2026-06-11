@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"time"
@@ -30,6 +31,11 @@ type SyncTrigger interface {
 	TriggerAsync(reqType domain.SyncType, trigger domain.SyncTrigger) (*domain.SyncRun, error)
 }
 
+// SyncUploader applies an uploaded CSV/zip as a synchronous full rebuild.
+type SyncUploader interface {
+	UploadFull(ctx context.Context, filename string, data []byte) (*domain.SyncRun, error)
+}
+
 // Options 配置路由装配所需的依赖与参数。
 //
 // 查询读路径（QueryService）始终装配；同步状态/触发端点在 AddressReader +
@@ -45,6 +51,7 @@ type Options struct {
 	AddressReader domain.AddressReader     // CountAll → total_addresses
 	SyncRuns      domain.SyncRunRepository // 状态/历史
 	SyncTrigger   SyncTrigger              // 手动触发（异步）
+	SyncUploader  SyncUploader             // 手工上传全量同步（同步）
 
 	// 鉴权与 token 管理。
 	Auth          Authorizer
@@ -72,6 +79,7 @@ func NewRouter(opts Options) http.Handler {
 		reader:       opts.AddressReader,
 		runs:         opts.SyncRuns,
 		trigger:      opts.SyncTrigger,
+		uploader:     opts.SyncUploader,
 		queryTimeout: timeout,
 		logger:       logger,
 	}
@@ -108,6 +116,9 @@ func NewRouter(opts Options) http.Handler {
 	}
 	if opts.SyncTrigger != nil {
 		mux.Handle("POST /v1/sync/trigger", admin(h.syncTrigger))
+	}
+	if opts.SyncUploader != nil {
+		mux.Handle("POST /v1/sync/upload", admin(h.syncUpload))
 	}
 
 	// token 管理：均要求 admin scope。
