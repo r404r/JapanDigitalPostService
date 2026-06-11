@@ -1,12 +1,12 @@
 // Command server 启动 JapanDigitalPostService 的 HTTP API。
 //
-// 骨架阶段仅提供 GET /v1/health 与优雅关闭，证明工程基线可运行。
-// 业务路由（查询/同步/token）由 task-0005/0006/0008 在 internal/server 装配后接入。
+// 当前已接入地址查询读路径（task-0005）：/v1/health 与 /v1/addresses[/{zipcode}]。
+// 同步（task-0004）、认证中间件（task-0006）、token 管理等端点在后续 task 接入。
 package main
 
 import (
 	"context"
-	"encoding/json"
+	"database/sql"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -16,6 +16,9 @@ import (
 	"time"
 
 	"github.com/r404r/JapanDigitalPostService/internal/config"
+	"github.com/r404r/JapanDigitalPostService/internal/query"
+	"github.com/r404r/JapanDigitalPostService/internal/server"
+	"github.com/r404r/JapanDigitalPostService/internal/store"
 	"github.com/r404r/JapanDigitalPostService/internal/version"
 )
 
@@ -23,17 +26,25 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	cfg := config.Load()
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /v1/health", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]string{
-			"status":  "ok",
-			"version": version.Version,
-		})
+	db, err := openDB(logger, cfg)
+	if err != nil {
+		logger.Error("database init failed", "err", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	repo := store.NewAddressRepo(db)
+	svc := query.NewService(repo, cfg.FuzzyLimit, cfg.MaxTotal)
+
+	router := server.NewRouter(server.Options{
+		QueryService: svc,
+		QueryTimeout: cfg.QueryTimeout,
+		Logger:       logger,
 	})
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           mux,
+		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -59,8 +70,32 @@ func main() {
 	}
 }
 
-func writeJSON(w http.ResponseWriter, code int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(v)
+// openDB 打开数据库、执行迁移并按配置可选地播种示例数据。
+// 当前仅 sqlite 驱动已实现；postgres/mysql 由 task-0002 接入。
+func openDB(logger *slog.Logger, cfg config.Config) (*sql.DB, error) {
+	if cfg.DBDriver != "sqlite" {
+		return nil, errors.New("DB_DRIVER=" + cfg.DBDriver + " not yet supported (task-0002 adds postgres/mysql); use sqlite")
+	}
+	db, err := store.OpenSQLite(cfg.DBDSN)
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := store.Migrate(ctx, db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if cfg.SeedSample {
+		n, err := store.SeedSampleIfEmpty(ctx, db)
+		if err != nil {
+			_ = db.Close()
+			return nil, err
+		}
+		if n > 0 {
+			logger.Info("seeded sample addresses", "rows", n)
+		}
+	}
+	return db, nil
 }

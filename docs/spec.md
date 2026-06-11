@@ -39,11 +39,11 @@
 {
   "status": "ok",
   "total_count": 134,
-  "returned": 20,
+  "returned_count": 20,
   "truncated": true,
   "items": [
     {
-      "zipcode": "1000001",
+      "zipcode": "1000001", "jis_code": "13101",
       "prefecture": "東京都", "prefecture_kana": "トウキョウト",
       "city": "千代田区", "city_kana": "チヨダク",
       "town": "千代田", "town_kana": "チヨダ"
@@ -52,22 +52,30 @@
 }
 ```
 
-**状态语义**（`status` 字段 + HTTP 码）：
+- `total_count`：满足条件的总命中数。`returned_count`：本次返回条数。`truncated`：`total_count > returned_count` 时为 `true`。
+- 成功响应的 `status` 仅取 `ok` / `too_many_results`；其余情况返回统一错误体（§7），`status` 取对应机器码。
+
+**状态语义**（成功体的 `status` 字段 / 错误体 + HTTP 码）：
 | 情况 | status | HTTP |
 |---|---|---|
 | 正常 | `ok` | 200 |
 | 命中为 0 | `ok`（`items: []`, `total_count: 0`） | 200 |
 | 模糊结果被截断 | `ok` + `truncated: true` | 200 |
-| 命中过多（> `MAX_TOTAL`） | `too_many_results`（`total_count` 给出，`items` 可为前 20） | 200 |
+| 命中过多（> `MAX_TOTAL`） | `too_many_results`（`total_count` 给出，`items` 为前 `FUZZY_LIMIT` 条） | 200 |
 | 查询超时 | `timeout` | 504 |
-| 参数缺失/非法 | `invalid_request` | 400 |
+| 参数缺失/非法（无任一过滤项、邮编非数字、limit/offset 非整数等） | `invalid_request` | 400 |
 | 未认证/token 无效 | `unauthorized` | 401 |
 
-- **模糊查询最多返回 20 条**，并始终给出 `total_count`（总命中）。
-- 超时由 `QUERY_TIMEOUT`（默认 2s）控制，到时返回 `timeout`，不返回部分脏数据。
+- **模糊查询最多返回 `FUZZY_LIMIT`（默认 20）条**，并始终给出 `total_count`（总命中）。
+- 邮编 `zipcode`：长度恰为 7 位时精确匹配，否则按前缀匹配；`prefecture`/`city`/`q` 为跨字段 `LIKE` 模糊（覆盖汉字与カナ列），用户输入中的 `% _ \` 作为字面量转义。
+- 超时由 `QUERY_TIMEOUT`（默认 2s）控制：handler 建立 `context.WithTimeout` 并透传至 service → repository → DB 驱动；到时驱动中止查询、归还连接，返回 `timeout`，**不返回部分脏数据**。
+- 每个响应回写 `X-Request-Id`（沿用客户端传入或服务端生成），错误体附带同值 `trace_id`，便于端到端排查。
+
+> 认证现状：本端点的 Bearer 校验由 task-0006 接入，当前为放行的占位中间件，故 `401 unauthorized` 暂未实际触发（契约已就位）。
 
 ### 3.3 `GET /v1/addresses/{zipcode}` — 按邮编精确查询
-- 返回该邮编全部町域记录（一个邮编可对应多町域）。语义同上（无 `q`）。
+- 路径 `zipcode` 必须为 7 位数字（否则 `invalid_request`/400）。
+- 返回该邮编全部町域记录（一个邮编可对应多町域），并额外给出 `address_count`（= 该邮编的地址条数）。零命中返回 `not_found`/404。超时语义同 §3.2。
 
 ### 3.4 同步状态
 - `GET /v1/sync/status`：当前数据量、最近一次成功同步时间/类型、是否正在运行。
@@ -134,3 +142,4 @@
 | 日期 | task | 变更 |
 |---|---|---|
 | 2026-06-11 | 架构基线 | 初始 spec v1 |
+| 2026-06-11 | task-0005 | 实现 §3.2/§3.3 查询读路径：`returned` → `returned_count`，新增 `address_count`（邮编精确）与 `trace_id`；明确超时贯穿/字段转义/占位认证现状。 |

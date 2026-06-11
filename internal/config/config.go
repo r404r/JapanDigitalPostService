@@ -17,9 +17,14 @@ type Config struct {
 	FuzzyLimit   int           // FUZZY_LIMIT
 	MaxTotal     int           // MAX_TOTAL
 
-	// 以下字段在后续 task 启用（先占位，便于统一加载）：
 	DBDriver string // DB_DRIVER: postgres|mysql|sqlite
 	DBDSN    string // DB_DSN
+
+	// SeedSample：addresses 表为空时是否写入内置示例数据，便于本地启动即可查询。
+	// 同步引擎（task-0004）落地后应在生产关闭（SEED_SAMPLE_DATA=false）。
+	SeedSample bool // SEED_SAMPLE_DATA
+
+	// 以下字段在后续 task 启用（先占位，便于统一加载）：
 	SyncCron string // SYNC_CRON
 }
 
@@ -32,8 +37,18 @@ func Load() Config {
 		MaxTotal:     getInt("MAX_TOTAL", 1000),
 		DBDriver:     getEnv("DB_DRIVER", "sqlite"),
 		DBDSN:        getEnv("DB_DSN", "file:dev.db?cache=shared&_fk=1"),
+		SeedSample:   getBool("SEED_SAMPLE_DATA", true),
 		SyncCron:     getEnv("SYNC_CRON", "0 3 * * *"),
 	}
+}
+
+func getBool(key string, def bool) bool {
+	if v, ok := os.LookupEnv(key); ok && v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			return b
+		}
+	}
+	return def
 }
 
 func getEnv(key, def string) string {

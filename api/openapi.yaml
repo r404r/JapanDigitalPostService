@@ -46,15 +46,17 @@ paths:
       summary: 按邮编精确查询（一个邮编可对应多町域）
       operationId: getAddressByZipcode
       parameters:
-        - { name: zipcode, in: path, required: true, schema: { type: string } }
+        - { name: zipcode, in: path, required: true, schema: { type: string }, description: 7 位邮编（精确） }
       responses:
         '200':
-          description: ok
+          description: ok（含 address_count = 该邮编的地址条数）
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SearchResult' }
+        '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+        '504': { $ref: '#/components/responses/Error' }
   /sync/status:
     get:
       summary: 当前同步状态
@@ -175,13 +177,29 @@ components:
         town_kana: { type: string }
     SearchResult:
       type: object
+      description: >
+        查询成功响应。超时/参数非法/未认证等不返回本结构，而是 Error（见各端点的
+        400/401/404/504 响应）。
+      required: [status, total_count, returned_count, truncated, items]
       properties:
         status:
           type: string
-          enum: [ok, too_many_results, timeout]
-        total_count: { type: integer }
-        returned: { type: integer }
-        truncated: { type: boolean }
+          description: ok = 正常或零命中；too_many_results = 命中数超过 MAX_TOTAL。
+          enum: [ok, too_many_results]
+        total_count:
+          type: integer
+          description: 满足条件的总命中数（可能远大于 returned_count）。
+        returned_count:
+          type: integer
+          description: 本次实际返回的 items 条数（模糊查询硬上限 = FUZZY_LIMIT，默认 20）。
+        truncated:
+          type: boolean
+          description: total_count > returned_count 时为 true。
+        address_count:
+          type: integer
+          description: >
+            仅 GET /addresses/{zipcode} 返回：该邮编定位到的地址条数
+            （一个邮编可对应多个町域）。列表/模糊查询不含此字段。
         items:
           type: array
           items: { $ref: '#/components/schemas/Address' }
@@ -218,6 +236,11 @@ components:
         revoked_at: { type: string, format: date-time, nullable: true }
     Error:
       type: object
+      required: [status]
       properties:
-        status: { type: string }
-        message: { type: string }
+        status:
+          type: string
+          description: 机器可读状态码（spec §7）。
+          enum: [too_many_results, timeout, invalid_request, unauthorized, forbidden, not_found, rate_limited, internal_error, sync_running]
+        message: { type: string, description: 人类可读说明 }
+        trace_id: { type: string, description: 关联请求的 X-Request-Id，便于排查 }
