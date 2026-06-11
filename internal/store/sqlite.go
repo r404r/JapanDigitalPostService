@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/glebarez/sqlite"
@@ -76,14 +75,13 @@ func SeedSampleIfEmpty(ctx context.Context, db *sql.DB) (int, error) {
 			City: r.City, CityKana: r.CityKana,
 			Town: r.Town, TownKana: r.TownKana,
 		}
-		stmt := fmt.Sprintf(`INSERT INTO addresses
+		if _, err := tx.ExecContext(ctx, `INSERT INTO addresses
 			(zipcode, jis_code, prefecture, prefecture_kana, city, city_kana, town, town_kana,
 			 flag_multi_zip, flag_koaza, flag_chome, flag_multi_town, source_hash, updated_at)
-			VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 0, 0, 0, 0, %s, %s)`,
-			sqlQuote(a.Zipcode), sqlQuote(a.JISCode), sqlQuote(a.Prefecture), sqlQuote(a.PrefectureKana),
-			sqlQuote(a.City), sqlQuote(a.CityKana), sqlQuote(a.Town), sqlQuote(a.TownKana),
-			sqlQuote(a.ComputeHash()), sqlQuote(now.Format("2006-01-02 15:04:05")))
-		if _, err := tx.ExecContext(ctx, stmt); err != nil {
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, ?, ?)`,
+			a.Zipcode, a.JISCode, a.Prefecture, a.PrefectureKana,
+			a.City, a.CityKana, a.Town, a.TownKana,
+			a.ComputeHash(), now.Format("2006-01-02 15:04:05")); err != nil {
 			return 0, fmt.Errorf("seed insert: %w", err)
 		}
 	}
@@ -91,8 +89,4 @@ func SeedSampleIfEmpty(ctx context.Context, db *sql.DB) (int, error) {
 		return 0, err
 	}
 	return len(sampleRows), nil
-}
-
-func sqlQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
 }
