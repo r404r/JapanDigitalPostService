@@ -112,10 +112,17 @@
 
 ## 8. 前端 (React sample) 规格
 
+`web/` 提供 Vite + React + TypeScript sample。后端默认在 `localhost:8080`，开发服务器通过 `/v1` 代理访问 API。
+
 三个页面（最小可用）：
-1. **查询页**：输入邮编/都道府県/市区町村/关键字，展示结果表、`total_count`、`truncated`/`too_many_results`/`timeout` 状态提示。
-2. **同步状态页**：展示当前数据量、最近同步、运行历史（`sync_runs`），可手动触发（admin）。
-3. **Token 页**：发行 token（展示一次性明文）、列表、吊销（需 admin）。
+1. **查询页**：输入邮编/都道府県/市区町村/关键字，展示结果表、`total_count`、`returned_count`、`address_count`、多个地址对象，以及 `truncated`/`too_many_results`/`timeout` 状态提示。
+2. **同步状态页**：展示当前数据量、最近成功同步时间/类型、是否运行中、运行历史（类型、状态、时间、处理数量、错误摘要），可手动触发 full/diff（admin）。
+3. **Token 页**：发行 token（明文仅展示一次并提示保存）、脱敏列表、吊销（需 admin）。
+
+通用行为：
+- Bearer token 由用户输入，仅保存在浏览器 `sessionStorage`，不硬编码。
+- timeout、认证失败、权限不足、结果过多、0 结果、服务错误均显示明确 UI 状态。
+- sample UI 保持轻量，不承担完整后台产品化能力。
 
 ## 9. 测试规格（可复用）
 
@@ -134,3 +141,4 @@
 | 日期 | task | 变更 |
 |---|---|---|
 | 2026-06-11 | 架构基线 | 初始 spec v1 |
+| 2026-06-11 | task-0007 | 实现 React sample 查询、同步状态/历史、token 发行/管理页面与前端验证范围 |

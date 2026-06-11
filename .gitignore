@@ -20,6 +20,7 @@ coverage.*
 # 前端
 web/node_modules/
 web/dist/
+web/*.tsbuildinfo
 
 # 编辑器 / 系统
 .DS_Store

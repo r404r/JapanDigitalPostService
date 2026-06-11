@@ -1,4 +1,4 @@
-.PHONY: build run test lint tidy sync-soul gen
+.PHONY: build run test lint tidy sync-soul gen web-install web-dev web-build web-test
 
 build:
 	go build -o bin/server ./cmd/server
@@ -9,6 +9,18 @@ run:
 
 test:
 	go test ./...
+
+web-install:
+	npm install --prefix web
+
+web-dev:
+	npm run dev --prefix web
+
+web-build:
+	npm run build --prefix web
+
+web-test:
+	npm run test --prefix web
 
 lint:
 	gofmt -l .
