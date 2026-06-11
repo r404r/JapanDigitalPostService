@@ -387,25 +387,32 @@ func TestSyncUpload_RejectsUnsupportedExtensionBeforeEngine(t *testing.T) {
 	}
 }
 
+func TestSyncUploadMultipartLimitCanCarryRawCSV(t *testing.T) {
+	if maxUploadBytes <= 128<<20 {
+		t.Fatalf("maxUploadBytes=%d must exceed raw CSV cap plus multipart overhead", maxUploadBytes)
+	}
+}
+
 func TestSyncUpload_MapsEngineErrorsToJapaneseStructuredErrors(t *testing.T) {
 	cases := []struct {
 		name   string
 		err    error
+		code   int
 		status string
 		msg    string
 	}{
-		{"encoding", syncpkg.ErrUploadEncoding, "csv_format_error", "Shift-JIS"},
-		{"parse", errors.New("parse full: record 1 has 1 columns, want 15"), "csv_format_error", "utf_ken_all"},
-		{"unzip", errors.New("open uploaded zip: zip: not a valid zip file"), "unzip_failed", "解凍"},
-		{"import", errors.New("upsert failed"), "import_failed", "取り込み"},
+		{"encoding", syncpkg.ErrUploadEncoding, 422, "csv_format_error", "Shift-JIS"},
+		{"parse", errors.New("parse full: record 1 has 1 columns, want 15"), 422, "csv_format_error", "utf_ken_all"},
+		{"unzip", errors.New("open uploaded zip: zip: not a valid zip file"), 422, "unzip_failed", "解凍"},
+		{"import", errors.New("upsert failed"), 500, "internal_error", "取り込み"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			up := &fakeUploader{err: c.err}
 			h, admin, _ := newSyncRouter(t, Options{SyncUploader: up})
 			rec := doMultipartAuth(t, h, "/v1/sync/upload", admin, "file", "utf_ken_all.csv", []byte(syncUploadRowA+"\n"))
-			if rec.Code != 422 {
-				t.Fatalf("code=%d, want 422 body=%s", rec.Code, rec.Body.String())
+			if rec.Code != c.code {
+				t.Fatalf("code=%d, want %d body=%s", rec.Code, c.code, rec.Body.String())
 			}
 			var body errorDTO
 			_ = json.NewDecoder(rec.Body).Decode(&body)

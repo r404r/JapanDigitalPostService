@@ -114,7 +114,7 @@
 6. 并发：DB 单行锁（`sync_locks`）保证同一时刻仅一个同步在写；并发触发返回 `sync_running`（HTTP 409）。锁含 TTL（2h），持有进程崩溃后可被抢占，避免永久阻塞；释放锁的 DB 操作使用 `SYNC_LOCK_RELEASE_TIMEOUT` 短超时。
 7. 失败：记录 `error_message`，分批写 + 删除走事务，不破坏既有数据，在线查询（读路径）不受影响。server/batch 启动时会把上个进程遗留的 `running` 记录标记为 `failed`，并写入 `finished_at` / `duration_ms` / 安全错误摘要。
 8. 健壮性：下载带单次超时 + 指数退避重试（`DOWNLOAD_*`）、大小校验、zip 完整性校验、记录 checksum/文件大小；DB 连接带超时 + 退避重试，并统一配置连接池限额（`DB_*`）。
-   - 上传全量同步限制 multipart body（64MiB）与 zip 解压后的 CSV（128MiB），避免过大上传与 zip-bomb；仅支持 UTF-8 `utf_ken_all`，Shift-JIS 输入返回日语 `csv_format_error`。
+   - 上传全量同步限制 multipart body（150MiB，足以容纳 128MiB CSV 与 multipart 开销）与 zip 解压后的 CSV（128MiB），避免过大上传与 zip-bomb；仅支持 UTF-8 `utf_ken_all`，Shift-JIS 输入返回日语 `csv_format_error`。
 9. 可扩展：引擎依赖 `domain` repository / `Locker` 接口，无状态，可作为独立 worker 多实例运行；后续替换为 worker/queue 或分布式锁（PG advisory lock）只需换 `Locker` 实现，不改引擎。
 
 ## 5. 认证规格

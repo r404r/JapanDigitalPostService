@@ -422,6 +422,33 @@ func TestEngineUploadFullConcurrentRejected(t *testing.T) {
 	}
 }
 
+func TestEngineFinishUploadUsesFreshContextWhenRequestCanceled(t *testing.T) {
+	st := openTestStore(t)
+	e := newTestEngine(t, st, nil)
+
+	run, start, err := e.beginRun(context.Background(), domain.SyncFull, domain.TriggerUpload)
+	if err != nil {
+		t.Fatalf("beginRun: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err = e.finishUpload(ctx, run, start, ApplyResult{Added: 1, Total: 1}, context.Canceled)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err=%v, want context.Canceled", err)
+	}
+	latest, lerr := st.SyncRuns().Latest(context.Background())
+	if lerr != nil {
+		t.Fatalf("Latest: %v", lerr)
+	}
+	if latest == nil || latest.Status != domain.StatusFailed || latest.FinishedAt == nil {
+		t.Fatalf("latest=%+v, want failed finalized run", latest)
+	}
+	if !strings.Contains(latest.ErrorMessage, "context canceled") {
+		t.Fatalf("error=%q, want context canceled", latest.ErrorMessage)
+	}
+}
+
 func zipCSV(t *testing.T, name string, data []byte) []byte {
 	t.Helper()
 	var buf bytes.Buffer

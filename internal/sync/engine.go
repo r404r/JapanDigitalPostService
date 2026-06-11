@@ -316,7 +316,13 @@ func (e *Engine) finishUpload(ctx context.Context, run *domain.SyncRun, start ti
 		e.logger.Info("sync upload succeeded", "run_id", run.ID,
 			"added", res.Added, "updated", res.Updated, "deleted", res.Deleted, "total", res.Total)
 	}
-	if uerr := e.runs.Update(ctx, run); uerr != nil {
+	updateCtx := ctx
+	var cancel context.CancelFunc
+	if ctx.Err() != nil {
+		updateCtx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+	}
+	if uerr := e.runs.Update(updateCtx, run); uerr != nil {
 		e.logger.Error("update sync upload run", "run_id", run.ID, "err", uerr)
 		if err == nil {
 			err = uerr

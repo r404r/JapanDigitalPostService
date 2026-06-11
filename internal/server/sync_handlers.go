@@ -13,7 +13,7 @@ import (
 	syncpkg "github.com/r404r/JapanDigitalPostService/internal/sync"
 )
 
-const maxUploadBytes int64 = 64 << 20
+const maxUploadBytes int64 = 150 << 20
 
 // ---- 对外 JSON 形态（snake_case，契约见 api/openapi.yaml）----
 
@@ -208,31 +208,27 @@ func (h *handlers) syncUpload(w http.ResponseWriter, r *http.Request) {
 			h.writeStatusError(w, r, http.StatusConflict, "sync_running", "同期が実行中です。完了後に再度アップロードしてください。")
 			return
 		}
-		status, msg := uploadError(err)
-		code := http.StatusUnprocessableEntity
-		if status == "unsupported_file" {
-			code = http.StatusBadRequest
-		}
+		code, status, msg := uploadError(err)
 		h.writeStatusError(w, r, code, status, msg)
 		return
 	}
 	writeJSON(w, http.StatusOK, toSyncRunDTO(*run))
 }
 
-func uploadError(err error) (string, string) {
+func uploadError(err error) (int, string, string) {
 	switch {
 	case errors.Is(err, syncpkg.ErrUnsupportedUploadFile):
-		return "unsupported_file", "zip または csv ファイルのみアップロードできます。"
+		return http.StatusBadRequest, "unsupported_file", "zip または csv ファイルのみアップロードできます。"
 	case errors.Is(err, syncpkg.ErrUploadCSVTooLarge):
-		return "invalid_request", "CSV の展開サイズが上限を超えています。"
+		return http.StatusBadRequest, "invalid_request", "CSV の展開サイズが上限を超えています。"
 	case errors.Is(err, syncpkg.ErrUploadEncoding):
-		return "csv_format_error", "UTF-8 の utf_ken_all CSV のみ対応しています。Shift-JIS 版は利用できません。"
+		return http.StatusUnprocessableEntity, "csv_format_error", "UTF-8 の utf_ken_all CSV のみ対応しています。Shift-JIS 版は利用できません。"
 	case strings.Contains(err.Error(), "open uploaded zip"):
-		return "unzip_failed", "zip ファイルを解凍できませんでした。日本郵政の utf_ken_all zip を指定してください。"
+		return http.StatusUnprocessableEntity, "unzip_failed", "zip ファイルを解凍できませんでした。日本郵政の utf_ken_all zip を指定してください。"
 	case strings.Contains(err.Error(), "parse full"):
-		return "csv_format_error", "CSV の形式が utf_ken_all と一致しません。"
+		return http.StatusUnprocessableEntity, "csv_format_error", "CSV の形式が utf_ken_all と一致しません。"
 	default:
-		return "import_failed", "同期データの取り込みに失敗しました。"
+		return http.StatusInternalServerError, "internal_error", "同期データの取り込みに失敗しました。"
 	}
 }
 

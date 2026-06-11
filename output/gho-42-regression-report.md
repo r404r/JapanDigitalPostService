@@ -14,12 +14,13 @@ Date: 2026-06-12
 
 - Admin-only upload endpoint; read scope is rejected.
 - Unsupported file extension returns structured Japanese `unsupported_file`.
-- Oversized multipart body is capped at 64 MiB.
+- Oversized multipart body is capped at 150 MiB, above the raw CSV cap plus multipart overhead.
 - Zip CSV entry expansion is capped at 128 MiB.
 - Invalid zip returns structured Japanese `unzip_failed`.
 - Non-UTF-8 / Shift-JIS input returns structured Japanese `csv_format_error`.
 - Malformed `utf_ken_all` CSV returns structured Japanese `csv_format_error`.
-- Import failures return structured Japanese `import_failed`.
+- Server-side import failures return Japanese `internal_error` and are logged as 5xx.
+- Canceled upload request contexts still finalize `sync_runs` instead of leaving `running` rows.
 - Concurrent schedule/manual/upload sync returns `409 sync_running`.
 - Successful upload applies `ApplyFull` with existing prune/min-row behavior.
 - Failed upload attempts are visible in `sync_runs`.
@@ -27,6 +28,7 @@ Date: 2026-06-12
 ## Verification
 
 - `env GOCACHE=/tmp/go-build-cache go test ./...` passed.
+- `env GOCACHE=/tmp/go-build-cache go vet ./...` passed.
 - `cd web && npm test` passed: 11 tests.
 - `cd web && npm run build` passed.
 - `git diff --check` passed.
