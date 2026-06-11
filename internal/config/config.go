@@ -1,7 +1,7 @@
 // Package config 从环境变量加载服务配置。
 //
-// 覆盖启动、数据库连接健壮性与同步引擎所需字段；认证 / 加密等字段在对应 task
-// （0006/0007）扩展。所有键与默认值见 docs/architecture.md §9。
+// 覆盖启动、数据库连接健壮性、同步引擎（task-0004）与认证 / 可选载荷加密
+// （task-0006）所需字段。所有键与默认值见 docs/architecture.md §9。
 package config
 
 import (
@@ -46,6 +46,14 @@ type Config struct {
 	DownloadTimeout    time.Duration // DOWNLOAD_TIMEOUT（单次尝试）
 	DownloadMaxRetry   int           // DOWNLOAD_MAX_RETRY
 	DownloadBackoff    time.Duration // DOWNLOAD_RETRY_BACKOFF
+
+	// 认证（task-0006）。
+	AdminBootstrapToken string // ADMIN_BOOTSTRAP_TOKEN: 首个 admin token，引导用
+
+	// 传输安全 / 可选载荷加密（task-0006 设计，task-0007 深化）。
+	PayloadEncryption string // PAYLOAD_ENCRYPTION: none|aes-gcm
+	PayloadEncKey     string // PAYLOAD_ENC_KEY: base64(32B) 密钥，仅 aes-gcm 模式需要
+	PayloadEncKeyID   string // PAYLOAD_ENC_KEY_ID: 可选密钥标识，便于轮换
 }
 
 // Load 从环境变量读取配置，缺省时使用 architecture §9 的默认值。
@@ -75,6 +83,12 @@ func Load() Config {
 		DownloadTimeout:    getDuration("DOWNLOAD_TIMEOUT", 60*time.Second),
 		DownloadMaxRetry:   getInt("DOWNLOAD_MAX_RETRY", 3),
 		DownloadBackoff:    getDuration("DOWNLOAD_RETRY_BACKOFF", time.Second),
+
+		AdminBootstrapToken: getEnv("ADMIN_BOOTSTRAP_TOKEN", ""),
+
+		PayloadEncryption: getEnv("PAYLOAD_ENCRYPTION", "none"),
+		PayloadEncKey:     getEnv("PAYLOAD_ENC_KEY", ""),
+		PayloadEncKeyID:   getEnv("PAYLOAD_ENC_KEY_ID", ""),
 	}
 }
 

@@ -99,10 +99,12 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SyncRun' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
   /tokens:
     get:
-      summary: 列出 token（脱敏，admin）
+      summary: 列出 token（脱敏，admin scope）
       operationId: listTokens
       responses:
         '200':
@@ -112,8 +114,10 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/TokenInfo' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
     post:
-      summary: 发行 token（admin，明文仅返回一次）
+      summary: 发行 token（admin scope，明文仅返回一次）
       operationId: createToken
       requestBody:
         required: true
@@ -124,6 +128,11 @@ paths:
               properties:
                 name: { type: string }
                 scope: { type: string, enum: [read, admin] }
+                ttl_seconds:
+                  type: integer
+                  format: int64
+                  minimum: 1
+                  description: 可选过期时长（秒）；省略=永不过期
               required: [name, scope]
       responses:
         '201':
@@ -136,14 +145,19 @@ paths:
                   - type: object
                     properties:
                       token: { type: string, description: 明文 token，仅此一次返回 }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
   /tokens/{id}:
     delete:
-      summary: 吊销 token（admin）
+      summary: 吊销 token（admin scope，立即生效）
       operationId: revokeToken
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
       responses:
         '204': { description: revoked }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
 components:
   securitySchemes:
@@ -213,12 +227,14 @@ components:
         error_message: { type: string, nullable: true }
     TokenInfo:
       type: object
+      description: 脱敏的 token 元数据；绝不含明文或 hash。
       properties:
         id: { type: string }
         name: { type: string }
-        prefix: { type: string }
+        prefix: { type: string, description: 明文前 8 位，便于识别，不可反推 }
         scope: { type: string, enum: [read, admin] }
         created_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time, nullable: true, description: 为空=永不过期 }
         last_used_at: { type: string, format: date-time, nullable: true }
         revoked_at: { type: string, format: date-time, nullable: true }
     Error:
