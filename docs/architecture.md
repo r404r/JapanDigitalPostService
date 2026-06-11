@@ -141,7 +141,7 @@
 
 ### 5.4 健壮性
 - **下载**：HTTP 超时 + 指数退避重试（次数/间隔可配），校验 Content-Length 与解压完整性。
-- **DB 连接**：连接超时（`DB_CONNECT_TIMEOUT`），首连与运行期断连的重试/退避。
+- **DB 连接**：连接超时（`DB_CONNECT_TIMEOUT`），首连与运行期断连的重试/退避；底层 `database/sql` 连接池在 `store.Open` 统一设置，GORM 写路径与 raw SQL 读路径共享同一组 `DB_MAX_OPEN_CONNS` / `DB_MAX_IDLE_CONNS` / `DB_CONN_MAX_LIFETIME` 限额。
 - **流式处理**：CSV 流式解析 + 分批写入（默认 1000 行/批），避免大文件全量入内存。
 - **可观测**：每次运行写 `sync_runs`，详细计数 + 错误；失败不影响在线查询（读路径与写路径解耦）。
 - **优雅关闭**：手动触发的异步同步由 Engine 跟踪；server shutdown 时取消并等待后台任务退出，取消中的运行记录会收敛为 `failed`。
@@ -193,6 +193,7 @@
 | `DB_DSN` | `file:dev.db?...` | 连接串 |
 | `DB_CONNECT_TIMEOUT` | `5s` | 连接超时 |
 | `DB_MAX_RETRY` / `DB_RETRY_BACKOFF` | `5` / `500ms` | 连接重试 |
+| `DB_MAX_OPEN_CONNS` / `DB_MAX_IDLE_CONNS` / `DB_CONN_MAX_LIFETIME` | SQLite: `1` / `1` / `0s`; PG/MySQL: `25` / `10` / `1h` | 连接池上限 / 空闲连接 / 连接生命周期 |
 | `SYNC_CRON` | `0 3 * * *` | 同步频率 |
 | `SYNC_FULL_URL` | 官网全量 zip | 全量数据源 |
 | `QUERY_TIMEOUT` | `2s` | 查询超时 |

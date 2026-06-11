@@ -27,11 +27,14 @@ type Config struct {
 	MaxTotal     int           // MAX_TOTAL
 
 	// 数据库连接与健壮性。
-	DBDriver         string        // DB_DRIVER: postgres|mysql|sqlite
-	DBDSN            string        // DB_DSN
-	DBConnectTimeout time.Duration // DB_CONNECT_TIMEOUT
-	DBMaxRetry       int           // DB_MAX_RETRY
-	DBRetryBackoff   time.Duration // DB_RETRY_BACKOFF
+	DBDriver          string        // DB_DRIVER: postgres|mysql|sqlite
+	DBDSN             string        // DB_DSN
+	DBConnectTimeout  time.Duration // DB_CONNECT_TIMEOUT
+	DBMaxRetry        int           // DB_MAX_RETRY
+	DBRetryBackoff    time.Duration // DB_RETRY_BACKOFF
+	DBMaxOpenConns    int           // DB_MAX_OPEN_CONNS
+	DBMaxIdleConns    int           // DB_MAX_IDLE_CONNS
+	DBConnMaxLifetime time.Duration // DB_CONN_MAX_LIFETIME
 
 	// 同步调度与引擎。
 	SyncCron           string        // SYNC_CRON
@@ -63,6 +66,8 @@ type Config struct {
 
 // Load 从环境变量读取配置，缺省时使用 architecture §9 的默认值。
 func Load() Config {
+	dbDriver := getEnv("DB_DRIVER", "sqlite")
+	maxOpenDefault, maxIdleDefault, lifetimeDefault := dbPoolDefaults(dbDriver)
 	return Config{
 		HTTPAddr:     getEnv("HTTP_ADDR", ":8080"),
 		StaticDir:    getEnv("STATIC_DIR", ""),
@@ -70,11 +75,14 @@ func Load() Config {
 		FuzzyLimit:   getInt("FUZZY_LIMIT", 20),
 		MaxTotal:     getInt("MAX_TOTAL", 1000),
 
-		DBDriver:         getEnv("DB_DRIVER", "sqlite"),
-		DBDSN:            getEnv("DB_DSN", "file:dev.db?cache=shared&_fk=1"),
-		DBConnectTimeout: getDuration("DB_CONNECT_TIMEOUT", 5*time.Second),
-		DBMaxRetry:       getInt("DB_MAX_RETRY", 5),
-		DBRetryBackoff:   getDuration("DB_RETRY_BACKOFF", 500*time.Millisecond),
+		DBDriver:          dbDriver,
+		DBDSN:             getEnv("DB_DSN", "file:dev.db?cache=shared&_fk=1"),
+		DBConnectTimeout:  getDuration("DB_CONNECT_TIMEOUT", 5*time.Second),
+		DBMaxRetry:        getInt("DB_MAX_RETRY", 5),
+		DBRetryBackoff:    getDuration("DB_RETRY_BACKOFF", 500*time.Millisecond),
+		DBMaxOpenConns:    getInt("DB_MAX_OPEN_CONNS", maxOpenDefault),
+		DBMaxIdleConns:    getInt("DB_MAX_IDLE_CONNS", maxIdleDefault),
+		DBConnMaxLifetime: getDuration("DB_CONN_MAX_LIFETIME", lifetimeDefault),
 
 		SyncCron:           getEnv("SYNC_CRON", "0 3 * * *"),
 		SyncSchedulerOn:    getBool("SYNC_SCHEDULER_ENABLED", true),
@@ -98,6 +106,13 @@ func Load() Config {
 
 		SeedSample: getBool("SEED_SAMPLE_DATA", false),
 	}
+}
+
+func dbPoolDefaults(driver string) (maxOpen int, maxIdle int, maxLifetime time.Duration) {
+	if driver == "" || driver == "sqlite" {
+		return 1, 1, 0
+	}
+	return 25, 10, time.Hour
 }
 
 func getEnv(key, def string) string {

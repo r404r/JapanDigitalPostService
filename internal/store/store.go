@@ -19,11 +19,14 @@ import (
 
 // Options 控制 DB 连接的健壮性参数（docs/architecture.md §9）。
 type Options struct {
-	Driver         string
-	DSN            string
-	ConnectTimeout time.Duration
-	MaxRetry       int
-	RetryBackoff   time.Duration
+	Driver          string
+	DSN             string
+	ConnectTimeout  time.Duration
+	MaxRetry        int
+	RetryBackoff    time.Duration
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxLifetime time.Duration
 }
 
 // Store 持有 GORM 句柄并暴露各 repository。
@@ -62,6 +65,10 @@ func Open(ctx context.Context, opt Options) (*Store, error) {
 		return nil, fmt.Errorf("open db (driver=%s): %w", opt.Driver, lastErr)
 	}
 
+	if err := configurePool(db, opt); err != nil {
+		return nil, fmt.Errorf("configure pool: %w", err)
+	}
+
 	s := &Store{db: db}
 	if err := migrate(db); err != nil {
 		return nil, fmt.Errorf("migrate: %w", err)
@@ -97,6 +104,28 @@ func ping(ctx context.Context, db *gorm.DB, timeout time.Duration) error {
 	cctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	return sqlDB.PingContext(cctx)
+}
+
+func configurePool(db *gorm.DB, opt Options) error {
+	sqlDB, err := db.DB()
+	if err != nil {
+		return err
+	}
+	maxOpen, maxIdle, lifetime := opt.MaxOpenConns, opt.MaxIdleConns, opt.ConnMaxLifetime
+	if maxOpen == 0 && maxIdle == 0 && lifetime == 0 {
+		maxOpen, maxIdle, lifetime = defaultPoolOptions(opt.Driver)
+	}
+	sqlDB.SetMaxOpenConns(maxOpen)
+	sqlDB.SetMaxIdleConns(maxIdle)
+	sqlDB.SetConnMaxLifetime(lifetime)
+	return nil
+}
+
+func defaultPoolOptions(driver string) (maxOpen int, maxIdle int, lifetime time.Duration) {
+	if driver == "" || driver == "sqlite" {
+		return 1, 1, 0
+	}
+	return 25, 10, time.Hour
 }
 
 func migrate(db *gorm.DB) error {

@@ -25,11 +25,14 @@ func (a *SyncApp) Close() error { return a.Store.Close() }
 // BuildSync 由配置打开 Store 并构造同步 Engine。
 func BuildSync(ctx context.Context, cfg config.Config, logger *slog.Logger) (*SyncApp, error) {
 	st, err := store.Open(ctx, store.Options{
-		Driver:         cfg.DBDriver,
-		DSN:            cfg.DBDSN,
-		ConnectTimeout: cfg.DBConnectTimeout,
-		MaxRetry:       cfg.DBMaxRetry,
-		RetryBackoff:   cfg.DBRetryBackoff,
+		Driver:          cfg.DBDriver,
+		DSN:             cfg.DBDSN,
+		ConnectTimeout:  cfg.DBConnectTimeout,
+		MaxRetry:        cfg.DBMaxRetry,
+		RetryBackoff:    cfg.DBRetryBackoff,
+		MaxOpenConns:    cfg.DBMaxOpenConns,
+		MaxIdleConns:    cfg.DBMaxIdleConns,
+		ConnMaxLifetime: cfg.DBConnMaxLifetime,
 	})
 	if err != nil {
 		return nil, err

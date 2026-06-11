@@ -22,6 +22,38 @@ func openTemp(t *testing.T) *Store {
 	return st
 }
 
+func TestOpenAppliesSQLitePoolDefaults(t *testing.T) {
+	st := openTemp(t)
+	sqlDB, err := st.DB().DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := sqlDB.Stats().MaxOpenConnections; got != 1 {
+		t.Fatalf("MaxOpenConnections = %d, want 1", got)
+	}
+}
+
+func TestOpenAppliesCustomPoolLimits(t *testing.T) {
+	st, err := Open(context.Background(), Options{
+		Driver:          "sqlite",
+		DSN:             filepath.Join(t.TempDir(), "pool.db"),
+		MaxOpenConns:    3,
+		MaxIdleConns:    2,
+		ConnMaxLifetime: time.Minute,
+	})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	sqlDB, err := st.DB().DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := sqlDB.Stats().MaxOpenConnections; got != 3 {
+		t.Fatalf("MaxOpenConnections = %d, want 3", got)
+	}
+}
+
 func addr(zip, jis, town, kana string) domain.Address {
 	a := domain.Address{Zipcode: zip, JISCode: jis, Town: town, TownKana: kana, UpdatedAt: time.Unix(0, 0)}
 	a.ComputeHash()
