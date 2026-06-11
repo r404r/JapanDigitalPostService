@@ -18,6 +18,10 @@ coverage.*
 .env.local
 
 # 前端
+node_modules/
+**/node_modules/
+.vite/
+**/.vite/
 web/node_modules/
 web/dist/
 web/*.tsbuildinfo

@@ -163,6 +163,22 @@ DB_DSN=postal:postal@tcp(mysql:3306)/postal?parseTime=true&charset=utf8mb4
 docker compose -f deployments/manual-test.compose.yml up -d --build --force-recreate app
 ```
 
+若手工测试容器已经在运行，并且只是想用当前工作区的最新代码重新构建 Go 后端与生产前端，不需要清理数据库 volume。执行：
+
+```bash
+# 1) 查看当前容器状态
+docker compose -f deployments/manual-test.compose.yml ps
+
+# 2) 只重建并重启 app 服务；PG/MySQL 与 app-data volume 保持不变
+docker compose -f deployments/manual-test.compose.yml up -d --build --force-recreate app
+
+# 3) 确认 app 已恢复 healthy
+docker compose -f deployments/manual-test.compose.yml ps app
+curl http://localhost:8080/v1/health
+```
+
+如果启动时覆盖了宿主机端口，例如 `APP_HOST_PORT=18080`，健康检查也改为 `curl http://localhost:18080/v1/health`。完全重置数据时才使用下方 `down -v`。
+
 PostgreSQL 与 MySQL 数据分别保存在 `manual-pgdata` / `manual-mysqldata` volumes。完全清理手工测试数据：
 
 ```bash

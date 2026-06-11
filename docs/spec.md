@@ -161,6 +161,7 @@
 
 `web/` 提供 Vite + React + TypeScript sample。后端默认在 `localhost:8080`，开发服务器通过 `/v1` 代理访问 API。
 生产构建产物可通过 `STATIC_DIR` 由 Go 服务托管；此时前端同源调用 `/v1`，无需单独配置 API base。
+视觉风格参考日本邮便番号検索表单：淡蓝背景、深海军蓝标题与主按钮、大尺寸输入框、清晰深色边框、红色描边错误提示。
 
 三个页面（最小可用）：
 1. **查询页**：输入邮编/都道府県/市区町村/关键字，展示结果表、OpenAPI 字段 `total_count` / `returned_count` / `items`，并可展示 `items.length` 作为本次返回地址数量；同时展示 `truncated`/`too_many_results`/`timeout` 状态提示。
@@ -214,3 +215,4 @@
 | 2026-06-11 | GHO-37 (后端契约扩展) | `POST /v1/sync/trigger` 入参类型由 `full\|diff` 扩展为 `auto\|full\|diff`（§3.4）：openapi 请求体 enum 增加 `auto` 并补充各类型语义说明；handler 放行 `auto`（引擎 `resolveType` 已支持，库空→full、否则 diff），落库的 `SyncRun.type` 仍仅 full/diff。补 sync handler 单测覆盖 auto 触发返回解析后的真实类型。无新增依赖。 |
 | 2026-06-11 | GHO-38 (全功能手工测试容器) | §8/§10 增加 `STATIC_DIR` 生产前端托管；新增 `deployments/manual-test.Dockerfile`、`deployments/manual-test.compose.yml`、`deployments/manual-test.env`，一条 compose 命令启动后端+画面+内置 PG/MySQL，数据库通过 env 文件在 sqlite/postgres/mysql 间切换。 |
 | 2026-06-11 | task-0011 | React sample 管理页持有 token 时自动读取 `sync/status` 与最新 100 件 `sync/runs`，刷新/重新进入后从后端持久化 `sync_runs` 恢复同期履歴；清空 token 时清空同步状态与历史显示。无 OpenAPI 变更。 |
+| 2026-06-11 | task-0012 | 补充 `node_modules` 类目录 ignore、README 手工测试容器按最新代码重建 app 的步骤，并将 React sample 视觉调整为日本邮便番号検索风格。无 OpenAPI 变更。 |
