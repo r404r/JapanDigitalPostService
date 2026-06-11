@@ -103,6 +103,7 @@
 1. 调度：`cmd/server` 进程内 `robfig/cron` 按 `SYNC_CRON`（默认 `0 3 * * *`，每天 03:00）触发 `auto` 同步；可由 `SYNC_SCHEDULER_ENABLED=false` 关闭。server shutdown 时会取消在跑的调度同步并等待 job 退出。`cmd/batch --type auto|full|diff` 为独立入口，供外部调度器（K8s CronJob / 系统 cron）触发，与 server 共用同一引擎与 DB 锁。
 2. 判定：`auto` 时 `addresses` 为空 → full；否则 → diff。手动可强制 `full`/`diff`。
 3. full：下载 zip → 校验大小 → 解压 → **流式**逐行解析（不全量入内存）→ 分批 upsert（默认 1000/批，`ON CONFLICT(zipcode,jis_code,town,town_kana)`）→ 可选剪除官方文件中已消失的地址（`SYNC_FULL_PRUNE`，行数低于 `SYNC_FULL_MIN_ROWS` 时跳过剪枝以防截断文件误删）→ 写 `sync_runs(type=full)`。
+   - 全量剪枝按地址 id 分页扫描并分批删除 stale 记录；不持有长游标跨 DELETE 阶段。进程崩溃导致的部分剪枝可由下一次 full 同步幂等修复。
 4. diff：对**回看窗口** `SYNC_DIFF_LOOKBACK_MONTHS`（默认 3，含当月）内每个月份，下载 `utf_add_<YYMM>` / `utf_del_<YYMM>`，按时间升序应用——**先按废止文件 delete，再按新增文件 upsert**（保证"改名"=旧记录在 del + 新记录在 add 时最终留下新记录）。404 视为该月无差分并跳过。`diff_period` 记录最新已应用月份。
    - 废止 delete 按逻辑键分批批量执行，每批独立提交，使用跨方言可移植条件，避免大差分文件下单事务长时间持有锁。
    - **差分入口不确定性与保守 fallback**：无法可靠得知"自上次同步以来应补哪几个月"。采用固定回看窗口而非精确游标——差分应用对 add（upsert 幂等）/ del（删不存在记 0）天然幂等，重复覆盖近几个月零副作用；窗口足够覆盖常规调度间隔。若窗口内**无任何**可用差分文件，则按 `SYNC_DIFF_FALLBACK_FULL`（默认 true）回退全量重建；关闭时记 `failed`（不破坏数据）。长期停机后建议直接全量（清空 `addresses` 即触发 auto-full）。
@@ -233,3 +234,4 @@
 | 2026-06-11 | task-0022 | 修复 Claude Review #7：`sync_locks` release 改用 `SYNC_LOCK_RELEASE_TIMEOUT` 控制的短超时 context，避免 DB 异常时同步 goroutine 无限阻塞。无 OpenAPI 变更。 |
 | 2026-06-11 | task-0023 | 修复 Claude Review #8：cron scheduler 持有可取消 root context，`Stop()` 会取消在跑调度同步并等待 job 退出。无 OpenAPI 变更。 |
 | 2026-06-11 | task-0024 | 修复 Claude Review #9：`DeleteByKeys` 从单事务逐行 DELETE 改为跨方言可移植的分批批量 DELETE，降低大差分废止文件下的锁持有时间与 round-trip。无 OpenAPI 变更。 |
+| 2026-06-11 | task-0025 | 修复 Claude Review #10：`DeleteNotIn` 改为按 id 分页扫描与分批剪枝，避免长游标跨 DELETE 阶段，并减少一次性 stale id 内存占用。无 OpenAPI 变更。 |

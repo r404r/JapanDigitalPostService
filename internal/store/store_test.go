@@ -177,6 +177,35 @@ func TestDeleteByKeysBatchesPortablePredicate(t *testing.T) {
 	}
 }
 
+func TestDeleteNotInBatchesScanAndDelete(t *testing.T) {
+	st := openTemp(t)
+	repo := st.Addresses()
+	ctx := context.Background()
+	rows := make([]domain.Address, 0, addressPruneScanChunk+5)
+	keep := make(map[domain.AddressKey]struct{})
+	for i := 0; i < addressPruneScanChunk+5; i++ {
+		a := addr(fmt.Sprintf("8%06d", i), "j", fmt.Sprintf("town-%03d", i), fmt.Sprintf("kana-%03d", i))
+		rows = append(rows, a)
+		if i%2 == 0 {
+			keep[a.Key()] = struct{}{}
+		}
+	}
+	if err := repo.UpsertBatch(ctx, rows); err != nil {
+		t.Fatal(err)
+	}
+	deleted, err := repo.DeleteNotIn(ctx, keep)
+	if err != nil {
+		t.Fatalf("DeleteNotIn: %v", err)
+	}
+	wantDeleted := int64(len(rows) - len(keep))
+	if deleted != wantDeleted {
+		t.Fatalf("DeleteNotIn deleted %d, want %d", deleted, wantDeleted)
+	}
+	if got, err := repo.Count(ctx); err != nil || got != int64(len(keep)) {
+		t.Fatalf("remaining count = %d err=%v, want %d", got, err, len(keep))
+	}
+}
+
 func TestSyncRunRepository(t *testing.T) {
 	st := openTemp(t)
 	runs := st.SyncRuns()

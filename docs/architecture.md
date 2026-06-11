@@ -144,6 +144,7 @@
 - **下载**：HTTP 超时 + 指数退避重试（次数/间隔可配），校验 Content-Length 与解压完整性。
 - **DB 连接**：连接超时（`DB_CONNECT_TIMEOUT`），首连与运行期断连的重试/退避；底层 `database/sql` 连接池在 `store.Open` 统一设置，GORM 写路径与 raw SQL 读路径共享同一组 `DB_MAX_OPEN_CONNS` / `DB_MAX_IDLE_CONNS` / `DB_CONN_MAX_LIFETIME` 限额。
 - **流式处理**：CSV 流式解析 + 分批写入（默认 1000 行/批），避免大文件全量入内存。
+- **全量剪枝**：按地址 id 分页扫描并分批删除 stale 记录，避免长游标跨 DELETE 阶段。
 - **可观测**：每次运行写 `sync_runs`，详细计数 + 错误；失败不影响在线查询（读路径与写路径解耦）。
 - **优雅关闭**：手动触发的异步同步由 Engine 跟踪；server shutdown 时取消并等待后台任务退出，取消中的运行记录会收敛为 `failed`。
 - **调度停止**：进程内 cron scheduler 持有可取消 root context；server shutdown 时会取消当前调度同步并等待 job 退出。
