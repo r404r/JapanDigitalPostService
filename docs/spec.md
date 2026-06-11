@@ -104,6 +104,7 @@
 2. 判定：`auto` 时 `addresses` 为空 → full；否则 → diff。手动可强制 `full`/`diff`。
 3. full：下载 zip → 校验大小 → 解压 → **流式**逐行解析（不全量入内存）→ 分批 upsert（默认 1000/批，`ON CONFLICT(zipcode,jis_code,town,town_kana)`）→ 可选剪除官方文件中已消失的地址（`SYNC_FULL_PRUNE`，行数低于 `SYNC_FULL_MIN_ROWS` 时跳过剪枝以防截断文件误删）→ 写 `sync_runs(type=full)`。
 4. diff：对**回看窗口** `SYNC_DIFF_LOOKBACK_MONTHS`（默认 3，含当月）内每个月份，下载 `utf_add_<YYMM>` / `utf_del_<YYMM>`，按时间升序应用——**先按废止文件 delete，再按新增文件 upsert**（保证"改名"=旧记录在 del + 新记录在 add 时最终留下新记录）。404 视为该月无差分并跳过。`diff_period` 记录最新已应用月份。
+   - 废止 delete 按逻辑键分批批量执行，每批独立提交，使用跨方言可移植条件，避免大差分文件下单事务长时间持有锁。
    - **差分入口不确定性与保守 fallback**：无法可靠得知"自上次同步以来应补哪几个月"。采用固定回看窗口而非精确游标——差分应用对 add（upsert 幂等）/ del（删不存在记 0）天然幂等，重复覆盖近几个月零副作用；窗口足够覆盖常规调度间隔。若窗口内**无任何**可用差分文件，则按 `SYNC_DIFF_FALLBACK_FULL`（默认 true）回退全量重建；关闭时记 `failed`（不破坏数据）。长期停机后建议直接全量（清空 `addresses` 即触发 auto-full）。
 5. 幂等：每行算 `source_hash`（仅对地址内容，不含更新区分/变更理由），key 已存在且 hash 相同则跳过（unchanged，不写库）；重跑计数确定、稳定。
    - **逻辑唯一键 = `(zipcode, jis_code, town, town_kana)`**（决策 task-0004 review）。`town_kana` 是键的一部分：真实全量数据中同一 `(zipcode, jis_code, town)` 可对应多种合法读音（实测 `6730012/28203/和坂`：`カニガサカ` / `ワサカ`），并入 `town_kana` 后两行各自独立、不被唯一索引折叠、不丢记录，且同键两行落入同一 upsert 分块时不再触发 SQLite `ON CONFLICT ... cannot affect row a second time`。差分"改名/变更"仍由 del（旧记录，含旧 kana）+ add（新记录，含新 kana）表达，键变化时由删除+新增收敛，语义不变。
@@ -231,3 +232,4 @@
 | 2026-06-11 | task-0020 | 修复 Claude Review #3：HTTP server 新增 read-header/read/write/idle timeout 配置并在 `http.Server` 上生效，降低慢连接长期占用风险。无 OpenAPI 变更。 |
 | 2026-06-11 | task-0022 | 修复 Claude Review #7：`sync_locks` release 改用 `SYNC_LOCK_RELEASE_TIMEOUT` 控制的短超时 context，避免 DB 异常时同步 goroutine 无限阻塞。无 OpenAPI 变更。 |
 | 2026-06-11 | task-0023 | 修复 Claude Review #8：cron scheduler 持有可取消 root context，`Stop()` 会取消在跑调度同步并等待 job 退出。无 OpenAPI 变更。 |
+| 2026-06-11 | task-0024 | 修复 Claude Review #9：`DeleteByKeys` 从单事务逐行 DELETE 改为跨方言可移植的分批批量 DELETE，降低大差分废止文件下的锁持有时间与 round-trip。无 OpenAPI 变更。 |

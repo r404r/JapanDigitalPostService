@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -145,6 +146,34 @@ func TestDeleteByKeysAndNotIn(t *testing.T) {
 	}
 	if n, _ := repo.Count(ctx); n != 1 {
 		t.Errorf("count = %d, want 1", n)
+	}
+}
+
+func TestDeleteByKeysBatchesPortablePredicate(t *testing.T) {
+	st := openTemp(t)
+	repo := st.Addresses()
+	ctx := context.Background()
+	rows := make([]domain.Address, 0, addressKeyDeleteChunk+5)
+	keys := make([]domain.AddressKey, 0, addressKeyDeleteChunk+4)
+	for i := 0; i < addressKeyDeleteChunk+5; i++ {
+		a := addr(fmt.Sprintf("9%06d", i), "j", fmt.Sprintf("town-%03d", i), fmt.Sprintf("kana-%03d", i))
+		rows = append(rows, a)
+		if i < addressKeyDeleteChunk+4 {
+			keys = append(keys, a.Key())
+		}
+	}
+	if err := repo.UpsertBatch(ctx, rows); err != nil {
+		t.Fatal(err)
+	}
+	n, err := repo.DeleteByKeys(ctx, keys)
+	if err != nil {
+		t.Fatalf("DeleteByKeys: %v", err)
+	}
+	if n != int64(len(keys)) {
+		t.Fatalf("DeleteByKeys deleted %d, want %d", n, len(keys))
+	}
+	if got, err := repo.Count(ctx); err != nil || got != 1 {
+		t.Fatalf("remaining count = %d err=%v, want 1", got, err)
 	}
 }
 

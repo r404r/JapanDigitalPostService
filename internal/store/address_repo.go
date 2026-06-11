@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"strings"
 
 	"github.com/r404r/JapanDigitalPostService/internal/domain"
 	"gorm.io/gorm"
@@ -9,6 +10,8 @@ import (
 )
 
 type addressRepo struct{ db *gorm.DB }
+
+const addressKeyDeleteChunk = 200
 
 func (r *addressRepo) Count(ctx context.Context) (int64, error) {
 	var n int64
@@ -74,19 +77,32 @@ func (r *addressRepo) DeleteByKeys(ctx context.Context, keys []domain.AddressKey
 		return 0, nil
 	}
 	var total int64
-	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		for _, k := range keys {
-			res := tx.Where("zipcode = ? AND jis_code = ? AND town = ? AND town_kana = ?",
-				k.Zipcode, k.JISCode, k.Town, k.TownKana).
-				Delete(&domain.Address{})
-			if res.Error != nil {
-				return res.Error
-			}
-			total += res.RowsAffected
+	for i := 0; i < len(keys); i += addressKeyDeleteChunk {
+		end := i + addressKeyDeleteChunk
+		if end > len(keys) {
+			end = len(keys)
 		}
-		return nil
-	})
-	return total, err
+		where, args := addressKeysPredicate(keys[i:end])
+		res := r.db.WithContext(ctx).Where(where, args...).Delete(&domain.Address{})
+		if res.Error != nil {
+			return total, res.Error
+		}
+		total += res.RowsAffected
+	}
+	return total, nil
+}
+
+func addressKeysPredicate(keys []domain.AddressKey) (string, []any) {
+	var b strings.Builder
+	args := make([]any, 0, len(keys)*4)
+	for i, k := range keys {
+		if i > 0 {
+			b.WriteString(" OR ")
+		}
+		b.WriteString("(zipcode = ? AND jis_code = ? AND town = ? AND town_kana = ?)")
+		args = append(args, k.Zipcode, k.JISCode, k.Town, k.TownKana)
+	}
+	return b.String(), args
 }
 
 // DeleteNotIn 流式扫描全部逻辑键，删除不在 keep 中的记录。仅在全量同步成功解析后
