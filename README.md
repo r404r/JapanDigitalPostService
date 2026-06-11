@@ -44,6 +44,7 @@ make ci           # 一键本地 CI：fmt + vet + build + test + 灵魂文件 + 
 | 变量 | 默认 | 说明 |
 |---|---|---|
 | `HTTP_ADDR` | `:8080` | 监听地址 |
+| `HTTP_READ_HEADER_TIMEOUT` / `HTTP_READ_TIMEOUT` / `HTTP_WRITE_TIMEOUT` / `HTTP_IDLE_TIMEOUT` | `5s` / `15s` / `30s` / `120s` | HTTP server 慢连接/读写/keep-alive 超时 |
 | `DB_DRIVER` / `DB_DSN` | `sqlite` / `file:dev.db?...` | 数据库驱动与连接串（`sqlite` \| `postgres` \| `mysql` 三方言均已实现） |
 | `DB_MAX_OPEN_CONNS` / `DB_MAX_IDLE_CONNS` / `DB_CONN_MAX_LIFETIME` | SQLite: `1` / `1` / `0s`; PG/MySQL: `25` / `10` / `1h` | 统一配置 GORM 写路径与 raw SQL 读路径共享的底层连接池 |
 | `SYNC_CRON` | `0 3 * * *` | 进程内同步频率；`SYNC_SCHEDULER_ENABLED=false` 关闭 |

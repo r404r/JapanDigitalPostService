@@ -188,6 +188,7 @@
 | 变量 | 默认 | 说明 |
 |---|---|---|
 | `HTTP_ADDR` | `:8080` | 监听地址 |
+| `HTTP_READ_HEADER_TIMEOUT` / `HTTP_READ_TIMEOUT` / `HTTP_WRITE_TIMEOUT` / `HTTP_IDLE_TIMEOUT` | `5s` / `15s` / `30s` / `120s` | HTTP server 慢连接、读写与 keep-alive 超时 |
 | `STATIC_DIR` | — | 可选 React 生产构建目录；设置后由 Go 服务托管非 `/v1` 路由 |
 | `DB_DRIVER` | `sqlite` | `postgres` / `mysql` / `sqlite` |
 | `DB_DSN` | `file:dev.db?...` | 连接串 |

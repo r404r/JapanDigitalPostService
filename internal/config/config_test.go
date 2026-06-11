@@ -7,7 +7,10 @@ import (
 
 func TestLoadDefaults(t *testing.T) {
 	// 清掉可能影响默认值的环境变量。
-	for _, k := range []string{"HTTP_ADDR", "STATIC_DIR", "QUERY_TIMEOUT", "FUZZY_LIMIT", "MAX_TOTAL", "DB_DRIVER", "DB_MAX_OPEN_CONNS", "DB_MAX_IDLE_CONNS", "DB_CONN_MAX_LIFETIME"} {
+	for _, k := range []string{
+		"HTTP_ADDR", "STATIC_DIR", "HTTP_READ_HEADER_TIMEOUT", "HTTP_READ_TIMEOUT", "HTTP_WRITE_TIMEOUT", "HTTP_IDLE_TIMEOUT",
+		"QUERY_TIMEOUT", "FUZZY_LIMIT", "MAX_TOTAL", "DB_DRIVER", "DB_MAX_OPEN_CONNS", "DB_MAX_IDLE_CONNS", "DB_CONN_MAX_LIFETIME",
+	} {
 		t.Setenv(k, "")
 	}
 	cfg := Load()
@@ -20,6 +23,11 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.QueryTimeout != 2*time.Second {
 		t.Errorf("QueryTimeout default = %v, want 2s", cfg.QueryTimeout)
 	}
+	if cfg.HTTPReadHeaderTimeout != 5*time.Second || cfg.HTTPReadTimeout != 15*time.Second ||
+		cfg.HTTPWriteTimeout != 30*time.Second || cfg.HTTPIdleTimeout != 120*time.Second {
+		t.Errorf("http timeouts = %v/%v/%v/%v, want 5s/15s/30s/120s",
+			cfg.HTTPReadHeaderTimeout, cfg.HTTPReadTimeout, cfg.HTTPWriteTimeout, cfg.HTTPIdleTimeout)
+	}
 	if cfg.FuzzyLimit != 20 {
 		t.Errorf("FuzzyLimit default = %d, want 20", cfg.FuzzyLimit)
 	}
@@ -31,6 +39,10 @@ func TestLoadDefaults(t *testing.T) {
 func TestLoadOverrides(t *testing.T) {
 	t.Setenv("HTTP_ADDR", ":9090")
 	t.Setenv("STATIC_DIR", "/app/web")
+	t.Setenv("HTTP_READ_HEADER_TIMEOUT", "2s")
+	t.Setenv("HTTP_READ_TIMEOUT", "3s")
+	t.Setenv("HTTP_WRITE_TIMEOUT", "4s")
+	t.Setenv("HTTP_IDLE_TIMEOUT", "5s")
 	t.Setenv("QUERY_TIMEOUT", "500ms")
 	t.Setenv("FUZZY_LIMIT", "10")
 	t.Setenv("DB_MAX_OPEN_CONNS", "12")
@@ -45,6 +57,11 @@ func TestLoadOverrides(t *testing.T) {
 	}
 	if cfg.QueryTimeout != 500*time.Millisecond {
 		t.Errorf("QueryTimeout = %v, want 500ms", cfg.QueryTimeout)
+	}
+	if cfg.HTTPReadHeaderTimeout != 2*time.Second || cfg.HTTPReadTimeout != 3*time.Second ||
+		cfg.HTTPWriteTimeout != 4*time.Second || cfg.HTTPIdleTimeout != 5*time.Second {
+		t.Errorf("http timeouts = %v/%v/%v/%v, want 2s/3s/4s/5s",
+			cfg.HTTPReadHeaderTimeout, cfg.HTTPReadTimeout, cfg.HTTPWriteTimeout, cfg.HTTPIdleTimeout)
 	}
 	if cfg.FuzzyLimit != 10 {
 		t.Errorf("FuzzyLimit = %d, want 10", cfg.FuzzyLimit)

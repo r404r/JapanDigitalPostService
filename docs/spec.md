@@ -189,6 +189,7 @@
 | 变量 | 默认 | 说明 |
 |---|---|---|
 | `STATIC_DIR` | — | 可选 React 生产构建目录；设置后 Go 服务托管非 `/v1` 路由并为前端路由 fallback 到 `index.html` |
+| `HTTP_READ_HEADER_TIMEOUT` / `HTTP_READ_TIMEOUT` / `HTTP_WRITE_TIMEOUT` / `HTTP_IDLE_TIMEOUT` | `5s` / `15s` / `30s` / `120s` | HTTP server 慢连接、读写与 keep-alive 超时 |
 | `SYNC_SCHEDULER_ENABLED` | `true` | server 进程内调度开关 |
 | `SYNC_FULL_URL` | 官网全量 zip | 全量数据源 |
 | `SYNC_ADD_URL_TEMPLATE` / `SYNC_DEL_URL_TEMPLATE` | 官网 add/del（含 `%s`=YYMM） | 差分数据源模板 |
@@ -226,3 +227,4 @@
 | 2026-06-11 | task-0017 | 修复 Claude Review #5：`TriggerAsync` 后台同步由 Engine root context/WaitGroup 跟踪，server shutdown 时取消并等待；取消中的 `sync_runs` 记录会收敛为 `failed`。无 OpenAPI 变更。 |
 | 2026-06-11 | task-0018 | 修复 Claude Review #6：server/batch 启动时将遗留 `sync_runs.running` 记录标记为 `failed`，补齐 `finished_at`、`duration_ms` 与错误摘要，避免重启后状态长期显示运行中。无 OpenAPI 变更。 |
 | 2026-06-11 | task-0019 | 修复 Claude Review #1/#2：新增 DB 连接池限额配置，并在 `store.Open` 对 GORM/raw SQL 共享的底层 `database/sql` 池统一设置 max open/idle/lifetime。无 OpenAPI 变更。 |
+| 2026-06-11 | task-0020 | 修复 Claude Review #3：HTTP server 新增 read-header/read/write/idle timeout 配置并在 `http.Server` 上生效，降低慢连接长期占用风险。无 OpenAPI 变更。 |

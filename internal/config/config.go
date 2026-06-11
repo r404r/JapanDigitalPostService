@@ -20,11 +20,15 @@ const (
 
 // Config 是服务运行配置。
 type Config struct {
-	HTTPAddr     string        // HTTP_ADDR
-	StaticDir    string        // STATIC_DIR: optional React production build directory
-	QueryTimeout time.Duration // QUERY_TIMEOUT
-	FuzzyLimit   int           // FUZZY_LIMIT
-	MaxTotal     int           // MAX_TOTAL
+	HTTPAddr              string        // HTTP_ADDR
+	StaticDir             string        // STATIC_DIR: optional React production build directory
+	HTTPReadHeaderTimeout time.Duration // HTTP_READ_HEADER_TIMEOUT
+	HTTPReadTimeout       time.Duration // HTTP_READ_TIMEOUT
+	HTTPWriteTimeout      time.Duration // HTTP_WRITE_TIMEOUT
+	HTTPIdleTimeout       time.Duration // HTTP_IDLE_TIMEOUT
+	QueryTimeout          time.Duration // QUERY_TIMEOUT
+	FuzzyLimit            int           // FUZZY_LIMIT
+	MaxTotal              int           // MAX_TOTAL
 
 	// 数据库连接与健壮性。
 	DBDriver          string        // DB_DRIVER: postgres|mysql|sqlite
@@ -69,11 +73,15 @@ func Load() Config {
 	dbDriver := getEnv("DB_DRIVER", "sqlite")
 	maxOpenDefault, maxIdleDefault, lifetimeDefault := dbPoolDefaults(dbDriver)
 	return Config{
-		HTTPAddr:     getEnv("HTTP_ADDR", ":8080"),
-		StaticDir:    getEnv("STATIC_DIR", ""),
-		QueryTimeout: getDuration("QUERY_TIMEOUT", 2*time.Second),
-		FuzzyLimit:   getInt("FUZZY_LIMIT", 20),
-		MaxTotal:     getInt("MAX_TOTAL", 1000),
+		HTTPAddr:              getEnv("HTTP_ADDR", ":8080"),
+		StaticDir:             getEnv("STATIC_DIR", ""),
+		HTTPReadHeaderTimeout: getDuration("HTTP_READ_HEADER_TIMEOUT", 5*time.Second),
+		HTTPReadTimeout:       getDuration("HTTP_READ_TIMEOUT", 15*time.Second),
+		HTTPWriteTimeout:      getDuration("HTTP_WRITE_TIMEOUT", 30*time.Second),
+		HTTPIdleTimeout:       getDuration("HTTP_IDLE_TIMEOUT", 120*time.Second),
+		QueryTimeout:          getDuration("QUERY_TIMEOUT", 2*time.Second),
+		FuzzyLimit:            getInt("FUZZY_LIMIT", 20),
+		MaxTotal:              getInt("MAX_TOTAL", 1000),
 
 		DBDriver:          dbDriver,
 		DBDSN:             getEnv("DB_DSN", "file:dev.db?cache=shared&_fk=1"),

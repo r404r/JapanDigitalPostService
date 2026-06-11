@@ -46,3 +46,4 @@ Squad leader 按依赖逐个分派；backlog 任务不要一次性全部并行�
 | [0017](task-0017-sync-trigger-shutdown.md) | 手动同步触发的 shutdown 跟踪。 |
 | [0018](task-0018-sync-run-startup-cleanup.md) | 启动时清理遗留 running 同步记录。 |
 | [0019](task-0019-db-pool-limits.md) | 统一配置数据库连接池限额。 |
+| [0020](task-0020-http-server-timeouts.md) | HTTP server timeout 配置。 |
