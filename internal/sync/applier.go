@@ -20,6 +20,9 @@ type ApplyResult struct {
 
 // applyBatch 对一批地址做幂等分类与 upsert：key 不存在→added；存在但 hash 变化→
 // updated；hash 相同→unchanged（跳过写入）。仅 added+updated 实际落库。
+//
+// ExistingHashes 与 UpsertBatch 不包在一个长事务里：同步引擎在调用 applier 前已
+// 持有 DB 全局同步锁，保证单写者；避免给整批下载/解析/写入套长事务以降低锁范围。
 func applyBatch(ctx context.Context, repo domain.AddressRepository, batch []domain.Address) (added, updated, unchanged int64, err error) {
 	if len(batch) == 0 {
 		return 0, 0, 0, nil

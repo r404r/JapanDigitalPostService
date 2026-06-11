@@ -52,3 +52,4 @@ Squad leader 按依赖逐个分派；backlog 任务不要一次性全部并行�
 | [0023](task-0023-scheduler-cancel-context.md) | cron scheduler 可取消 context。 |
 | [0024](task-0024-batch-delete-by-keys.md) | DeleteByKeys 分批批量删除。 |
 | [0025](task-0025-prune-delete-not-in-batches.md) | DeleteNotIn 分页扫描与分批剪枝。 |
+| [0026](task-0026-applier-single-writer-invariant.md) | 明确 applier 单写者设计约束。 |

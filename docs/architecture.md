@@ -139,6 +139,7 @@
 - 逻辑唯一键 `(zipcode, jis_code, town, town_kana)`：真实全量数据中同一 `(zipcode, jis_code, town)` 可有多种合法读音（实测 `6730012/28203/和坂`），`town_kana` 入键以保留各读音、避免确定性丢记录。
 - 解析每行计算 `source_hash`；upsert `ON CONFLICT(zipcode, jis_code, town, town_kana) DO UPDATE`，hash 相同则跳过计数为"unchanged"。
 - 同一文件重复执行结果一致（计数稳定），保证"重跑安全"。
+- Applier 的 `ExistingHashes` 分类读与 `UpsertBatch` 写不包在一个长事务中；正确性依赖 Engine 已持有全局同步锁，保证同一时刻只有一个同步写者。这样避免把下载/解析/写入整段放入长事务，同时保持幂等计数语义。
 
 ### 5.4 健壮性
 - **下载**：HTTP 超时 + 指数退避重试（次数/间隔可配），校验 Content-Length 与解压完整性。

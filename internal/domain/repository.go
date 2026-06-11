@@ -16,6 +16,9 @@ var ErrConflict = errors.New("unique constraint conflict")
 
 // AddressRepository 提供同步引擎所需的地址持久化原语。业务层只依赖本接口，
 // 不依赖 GORM；查询语义（task-0005）在此之上另行实现。
+//
+// 同步 applier 在 ExistingHashes 读与 UpsertBatch 写之间不包长事务；该设计依赖
+// Engine 在调用 applier 前已持有全局同步锁，保证同一时刻只有一个同步写者。
 type AddressRepository interface {
 	// Count 返回地址总数，用于判定 full vs diff。
 	Count(ctx context.Context) (int64, error)
