@@ -8,10 +8,11 @@ import type {
   SearchResult,
   SyncRun,
   SyncStatus,
+  SyncType,
   TokenInfo
 } from "./api/client";
 
-type Page = "search" | "sync" | "tokens";
+type Page = "search" | "admin";
 
 export default function App() {
   const [page, setPage] = useState<Page>("search");
@@ -50,18 +51,14 @@ export default function App() {
         <button className={page === "search" ? "active" : ""} onClick={() => setPage("search")}>
           検索
         </button>
-        <button className={page === "sync" ? "active" : ""} onClick={() => setPage("sync")}>
-          同期
-        </button>
-        <button className={page === "tokens" ? "active" : ""} onClick={() => setPage("tokens")}>
-          Tokens
+        <button className={page === "admin" ? "active" : ""} onClick={() => setPage("admin")}>
+          管理
         </button>
       </nav>
 
       <main>
         {page === "search" && <SearchPage api={api} hasToken={Boolean(token.trim())} />}
-        {page === "sync" && <SyncPage api={api} hasToken={Boolean(token.trim())} />}
-        {page === "tokens" && <TokenPage api={api} hasToken={Boolean(token.trim())} />}
+        {page === "admin" && <AdminPage api={api} hasToken={Boolean(token.trim())} />}
       </main>
     </div>
   );
@@ -130,12 +127,22 @@ function SearchPage({ api, hasToken }: { api: ApiClient; hasToken: boolean }) {
   );
 }
 
-function SyncPage({ api, hasToken }: { api: ApiClient; hasToken: boolean }) {
+function AdminPage({ api, hasToken }: { api: ApiClient; hasToken: boolean }) {
+  return (
+    <section className="workspace admin-workspace">
+      <SyncPanel api={api} hasToken={hasToken} />
+      <TokenPanel api={api} hasToken={hasToken} />
+    </section>
+  );
+}
+
+function SyncPanel({ api, hasToken }: { api: ApiClient; hasToken: boolean }) {
   const [status, setStatus] = useState<SyncStatus | null>(null);
   const [runs, setRuns] = useState<SyncRun[]>([]);
+  const [triggered, setTriggered] = useState<SyncRun | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [loading, setLoading] = useState(false);
-  const [triggerType, setTriggerType] = useState<"full" | "diff">("diff");
+  const [triggerType, setTriggerType] = useState<SyncType>("auto");
 
   const load = async () => {
     setLoading(true);
@@ -154,8 +161,12 @@ function SyncPage({ api, hasToken }: { api: ApiClient; hasToken: boolean }) {
   const trigger = async () => {
     setLoading(true);
     setError(null);
+    setTriggered(null);
     try {
-      await api.triggerSync(triggerType);
+      const runningRun = await api.triggerSync(triggerType);
+      setTriggered(runningRun);
+      setRuns((currentRuns) => [runningRun, ...currentRuns.filter((run) => run.id !== runningRun.id)]);
+      setStatus((currentStatus) => currentStatus ? { ...currentStatus, running: true } : currentStatus);
       await load();
     } catch (caught) {
       setError(caught as ApiError);
@@ -164,27 +175,39 @@ function SyncPage({ api, hasToken }: { api: ApiClient; hasToken: boolean }) {
   };
 
   return (
-    <section className="workspace">
+    <section className="admin-section">
       <section className="panel">
         <div className="section-heading">
-          <h2>同期状態</h2>
-          <p>現在のデータ量、直近成功同期、履歴を確認します。</p>
+          <h2>同期管理</h2>
+          <p>郵便番号データの同期を起動し、running 状態と履歴を確認します。</p>
         </div>
         <div className="actions">
           <button type="button" onClick={load} disabled={loading || !hasToken}>
             {loading ? "読込中" : "再読込"}
           </button>
-          <select value={triggerType} onChange={(event) => setTriggerType(event.target.value as "full" | "diff")}>
+          <select
+            aria-label="同期方式"
+            value={triggerType}
+            onChange={(event) => setTriggerType(event.target.value as SyncType)}
+            disabled={loading || !hasToken}
+          >
+            <option value="auto">auto</option>
             <option value="diff">diff</option>
             <option value="full">full</option>
           </select>
           <button type="button" onClick={trigger} disabled={loading || !hasToken}>
-            手動同期
+            同期実行
           </button>
           {!hasToken && <span className="hint">admin token が必要です。</span>}
         </div>
       </section>
 
+      {triggered && (
+        <div className="notice info" role="status">
+          <strong>{triggered.type}</strong>
+          <span>{triggered.status} として受け付けました。状態と履歴を更新しています。</span>
+        </div>
+      )}
       {error && <StatusNotice error={error} />}
       {status && (
         <section className="panel">
@@ -204,7 +227,7 @@ function SyncPage({ api, hasToken }: { api: ApiClient; hasToken: boolean }) {
   );
 }
 
-function TokenPage({ api, hasToken }: { api: ApiClient; hasToken: boolean }) {
+function TokenPanel({ api, hasToken }: { api: ApiClient; hasToken: boolean }) {
   const [tokens, setTokens] = useState<TokenInfo[]>([]);
   const [created, setCreated] = useState<CreatedToken | null>(null);
   const [form, setForm] = useState({ name: "", scope: "read" as "read" | "admin" });
@@ -252,10 +275,10 @@ function TokenPage({ api, hasToken }: { api: ApiClient; hasToken: boolean }) {
   };
 
   return (
-    <section className="workspace">
+    <section className="admin-section">
       <form className="panel" onSubmit={create}>
         <div className="section-heading">
-          <h2>Token 発行</h2>
+          <h2>Token 管理</h2>
           <p>明文 token は発行直後に一度だけ表示されます。</p>
         </div>
         <div className="input-grid compact">
