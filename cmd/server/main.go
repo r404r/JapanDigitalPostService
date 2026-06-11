@@ -102,7 +102,7 @@ func main() {
 	// 统一装配全部 /v1 路由：health（公开）+ 查询（read）+ 同步状态/历史（read）+
 	// 手动触发（admin）+ token 管理（admin）。鉴权与 token 处理器经 Options 注入，
 	// 保持 server 包与 auth 包解耦；与 internal/e2e 共用同一装配入口。
-	reader := store.NewAddressReadRepo(sqlDB)
+	reader := store.NewAddressReadRepoForDriver(sqlDB, cfg.DBDriver)
 	svc := query.NewService(reader, cfg.FuzzyLimit, cfg.MaxTotal)
 	router := server.NewRouter(server.Options{
 		QueryService:  svc,
@@ -115,8 +115,13 @@ func main() {
 		TokenHandlers: tokenHandlers,
 	})
 
+	var rootHandler http.Handler = router
+	if cfg.StaticDir != "" {
+		rootHandler = server.WithStaticFiles(router, cfg.StaticDir)
+	}
+
 	// 可选载荷加密对所有路由生效（none 时为零开销直通）。
-	handler := cipher.Middleware(router)
+	handler := cipher.Middleware(rootHandler)
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,

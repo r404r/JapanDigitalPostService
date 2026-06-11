@@ -15,12 +15,18 @@ import (
 // 跨方言可移植：检索一律用 LIKE（PG/MySQL/SQLite 均支持），不依赖方言特有
 // 全文索引；后续按方言优化（pg_trgm / ngram / FTS5）不改变本接口。
 type AddressReadRepo struct {
-	db *sql.DB
+	db     *sql.DB
+	driver string
 }
 
 // NewAddressReadRepo 包装一个已打开的 *sql.DB。
 func NewAddressReadRepo(db *sql.DB) *AddressReadRepo {
-	return &AddressReadRepo{db: db}
+	return NewAddressReadRepoForDriver(db, "sqlite")
+}
+
+// NewAddressReadRepoForDriver 包装一个已打开的 *sql.DB，并按驱动重写占位符。
+func NewAddressReadRepoForDriver(db *sql.DB, driver string) *AddressReadRepo {
+	return &AddressReadRepo{db: db, driver: driver}
 }
 
 // 选择列表与表名复用同一常量，确保 COUNT 与 SELECT 的 WHERE 完全一致。
@@ -36,7 +42,7 @@ func (r *AddressReadRepo) Search(ctx context.Context, q domain.AddressQuery) ([]
 	where, args := buildWhere(q)
 
 	var total int
-	countSQL := "SELECT COUNT(*) FROM " + addrTable + where
+	countSQL := rebindPlaceholders("SELECT COUNT(*) FROM "+addrTable+where, r.driver)
 	if err := r.db.QueryRowContext(ctx, countSQL, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count addresses: %w", err)
 	}
@@ -53,8 +59,8 @@ func (r *AddressReadRepo) Search(ctx context.Context, q domain.AddressQuery) ([]
 		offset = 0
 	}
 
-	selSQL := "SELECT " + addrColumns + " FROM " + addrTable + where +
-		" ORDER BY zipcode, id LIMIT ? OFFSET ?"
+	selSQL := rebindPlaceholders("SELECT "+addrColumns+" FROM "+addrTable+where+
+		" ORDER BY zipcode, id LIMIT ? OFFSET ?", r.driver)
 	selArgs := append(append([]any{}, args...), limit, offset)
 
 	rows, err := r.db.QueryContext(ctx, selSQL, selArgs...)
@@ -133,4 +139,22 @@ func buildWhere(q domain.AddressQuery) (string, []any) {
 func escapeLike(s string) string {
 	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 	return r.Replace(s)
+}
+
+func rebindPlaceholders(query, driver string) string {
+	if driver != "postgres" {
+		return query
+	}
+	var b strings.Builder
+	b.Grow(len(query) + 8)
+	n := 1
+	for _, ch := range query {
+		if ch == '?' {
+			b.WriteString(fmt.Sprintf("$%d", n))
+			n++
+			continue
+		}
+		b.WriteRune(ch)
+	}
+	return b.String()
 }

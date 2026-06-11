@@ -160,6 +160,7 @@
 ## 8. 前端 (React sample) 规格
 
 `web/` 提供 Vite + React + TypeScript sample。后端默认在 `localhost:8080`，开发服务器通过 `/v1` 代理访问 API。
+生产构建产物可通过 `STATIC_DIR` 由 Go 服务托管；此时前端同源调用 `/v1`，无需单独配置 API base。
 
 三个页面（最小可用）：
 1. **查询页**：输入邮编/都道府県/市区町村/关键字，展示结果表、OpenAPI 字段 `total_count` / `returned_count` / `items`，并可展示 `items.length` 作为本次返回地址数量；同时展示 `truncated`/`too_many_results`/`timeout` 状态提示。
@@ -184,6 +185,7 @@
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
+| `STATIC_DIR` | — | 可选 React 生产构建目录；设置后 Go 服务托管非 `/v1` 路由并为前端路由 fallback 到 `index.html` |
 | `SYNC_SCHEDULER_ENABLED` | `true` | server 进程内调度开关 |
 | `SYNC_FULL_URL` | 官网全量 zip | 全量数据源 |
 | `SYNC_ADD_URL_TEMPLATE` / `SYNC_DEL_URL_TEMPLATE` | 官网 add/del（含 `%s`=YYMM） | 差分数据源模板 |
@@ -210,3 +212,4 @@
 | 2026-06-11 | task-0010 (端到端收尾) | 收口复核 spec/openapi↔实现：§3.4 标注同步状态端点契约就位但待 task-0008 装配。新增端到端测试（同步 fixture→查询→token 鉴权）、可复用边界 fixture、一键脚本 `scripts/ci.sh`、CI OpenAPI 校验 job；openapi 为 `/sync/status`、`/sync/runs` 补 401。无行为变更。 |
 | 2026-06-11 | GHO-36 (装配收口) | 挂载 `/v1/sync/{status,runs,trigger}`（§3.4），并为查询/同步端点接入真实 Bearer 鉴权（§3.2/§5.1）：移除 `internal/server` 占位放行中间件，经 `server.Options` 注入 `Authorizer`/`TokenHandlers`/`SyncTrigger`，由 `cmd/server` 传入 `auth.Service`/engine——查询与 sync 状态需 `read`\|`admin`，trigger 与 token 管理仅 `admin`。trigger 经新增 `Engine.TriggerAsync` 异步执行（立即 202 返回 `running` run id，已有同步在跑返回 `sync_running`/409）。全部 /v1 路由统一在 `server.NewRouter` 装配，`cmd/server` 与 `internal/e2e` 共用同一入口；e2e 改为覆盖鉴权边界（无 token 401→read 查询→read 触发 403→admin 触发→status/runs 可见），并补 sync handler 单测。无 openapi 契约变更。 |
 | 2026-06-11 | GHO-37 (后端契约扩展) | `POST /v1/sync/trigger` 入参类型由 `full\|diff` 扩展为 `auto\|full\|diff`（§3.4）：openapi 请求体 enum 增加 `auto` 并补充各类型语义说明；handler 放行 `auto`（引擎 `resolveType` 已支持，库空→full、否则 diff），落库的 `SyncRun.type` 仍仅 full/diff。补 sync handler 单测覆盖 auto 触发返回解析后的真实类型。无新增依赖。 |
+| 2026-06-11 | GHO-38 (全功能手工测试容器) | §8/§10 增加 `STATIC_DIR` 生产前端托管；新增 `deployments/manual-test.Dockerfile`、`deployments/manual-test.compose.yml`、`deployments/manual-test.env`，一条 compose 命令启动后端+画面+内置 PG/MySQL，数据库通过 env 文件在 sqlite/postgres/mysql 间切换。 |

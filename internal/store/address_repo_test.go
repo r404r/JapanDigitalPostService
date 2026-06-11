@@ -73,6 +73,17 @@ func TestSearch_ZeroResults(t *testing.T) {
 	}
 }
 
+func TestRebindPlaceholders(t *testing.T) {
+	query := "SELECT * FROM addresses WHERE zipcode = ? LIMIT ? OFFSET ?"
+	if got := rebindPlaceholders(query, "sqlite"); got != query {
+		t.Fatalf("sqlite rebind = %q, want original", got)
+	}
+	want := "SELECT * FROM addresses WHERE zipcode = $1 LIMIT $2 OFFSET $3"
+	if got := rebindPlaceholders(query, "postgres"); got != want {
+		t.Fatalf("postgres rebind = %q, want %q", got, want)
+	}
+}
+
 func TestSearch_TruncationOver20(t *testing.T) {
 	db := newTestDB(t)
 	for i := 0; i < 25; i++ {

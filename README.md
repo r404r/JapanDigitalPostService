@@ -119,7 +119,59 @@ npm run dev --prefix web     # http://localhost:5173（dev server 代理后端 :
 画面包含：地址查询页（read token），后台管理区——触发同步（自动 / 强制全量 / 强制差分）、
 同步状态与历史、token 发行/管理（admin token）。明文 token 仅创建时展示一次，前端只存于 sessionStorage。
 
-### 6. 多方言验证（PostgreSQL / MySQL）
+### 6. 全功能手工测试（容器）
+
+一条命令启动 Go 后端、生产构建后的 React 画面，以及可切换使用的 PostgreSQL/MySQL 服务：
+
+```bash
+docker compose -f deployments/manual-test.compose.yml up -d --build
+```
+
+浏览器打开 `http://localhost:8080`。默认配置见 `deployments/manual-test.env`：
+
+- 默认使用 SQLite：`DB_DRIVER=sqlite`，数据库文件持久化在 Docker volume `app-data` 的 `/data/manual-test.db`。
+- 默认引导 admin token：`jdps_manual_admin_token`，仅限本地手工测试，不要用于生产。
+- 默认 `SEED_SAMPLE_DATA=true`，首次启动即可用画面查询示例数据；需要真实邮编数据时，可在管理页用 admin token 触发 `auto`/`full` 同步。
+- 前端以同源 `/v1` 调用后端，不需要额外配置 API base。
+
+如本机端口已被占用，可只覆盖宿主机端口，容器内配置不变：
+
+```bash
+APP_HOST_PORT=18080 POSTGRES_HOST_PORT=15432 MYSQL_HOST_PORT=13306 \
+  docker compose -f deployments/manual-test.compose.yml up -d --build
+```
+
+切换数据库只改 `deployments/manual-test.env` 中的 `DB_DRIVER` / `DB_DSN`，不用改 compose YAML 或代码：
+
+```dotenv
+# SQLite
+DB_DRIVER=sqlite
+DB_DSN=file:/data/manual-test.db?cache=shared&_fk=1
+
+# PostgreSQL（compose 内置服务名 postgres）
+DB_DRIVER=postgres
+DB_DSN=postgres://postal:postal@postgres:5432/postal?sslmode=disable
+
+# MySQL（compose 内置服务名 mysql）
+DB_DRIVER=mysql
+DB_DSN=postal:postal@tcp(mysql:3306)/postal?parseTime=true&charset=utf8mb4
+```
+
+切换后重启应用：
+
+```bash
+docker compose -f deployments/manual-test.compose.yml up -d --build --force-recreate app
+```
+
+PostgreSQL 与 MySQL 数据分别保存在 `manual-pgdata` / `manual-mysqldata` volumes。完全清理手工测试数据：
+
+```bash
+docker compose -f deployments/manual-test.compose.yml down -v
+```
+
+> 安全注意：`manual-test.env` 中的 token、数据库账号和密码都是本地手工测试示例值。不要用于生产；真实 token/密码不要写入镜像层或提交到仓库。
+
+### 7. 多方言验证（PostgreSQL / MySQL）
 
 ```bash
 docker compose -f deployments/docker-compose.yml up -d   # 仅启动 PG16 + MySQL8 两个数据库容器

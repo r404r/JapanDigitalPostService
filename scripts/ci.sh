@@ -41,4 +41,11 @@ else
 	echo "跳过：web/ 尚未落地（见 task-0009 React 前端）"
 fi
 
+step "手工测试镜像构建（deployments/manual-test.Dockerfile）"
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+	docker build -f deployments/manual-test.Dockerfile -t jdps-manual-test:ci .
+else
+	echo "跳过：未找到可用 Docker daemon（CI/本地有 Docker 时自动构建验证）"
+fi
+
 printf '\n\033[1;32m✓ 全部检查通过\033[0m\n'

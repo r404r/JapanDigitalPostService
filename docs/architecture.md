@@ -186,6 +186,7 @@
 | 变量 | 默认 | 说明 |
 |---|---|---|
 | `HTTP_ADDR` | `:8080` | 监听地址 |
+| `STATIC_DIR` | — | 可选 React 生产构建目录；设置后由 Go 服务托管非 `/v1` 路由 |
 | `DB_DRIVER` | `sqlite` | `postgres` / `mysql` / `sqlite` |
 | `DB_DSN` | `file:dev.db?...` | 连接串 |
 | `DB_CONNECT_TIMEOUT` | `5s` | 连接超时 |
@@ -202,6 +203,7 @@
 ## 10. 部署与运维
 
 - `deployments/docker-compose.yml`：本地一键起 PG + MySQL，便于多方言验证。
+- `deployments/manual-test.compose.yml`：全功能手工测试环境，一条命令构建并启动 Go API、React 生产构建页面、PG/MySQL 内置服务；数据库方言仅通过 `deployments/manual-test.env` 的 `DB_DRIVER` / `DB_DSN` 切换。默认 SQLite 数据持久化在 `app-data` volume，PG/MySQL 分别持久化在 `manual-pgdata` / `manual-mysqldata`。
 - 健康检查 `GET /v1/health`（liveness/readiness）。
 - 日志结构化（slog），关键事件：同步开始/结束/失败、token 校验失败、查询超时。
 - 迁移：开发用 GORM AutoMigrate；生产建议显式 migration（`migrations/`，可移植 SQL）。
