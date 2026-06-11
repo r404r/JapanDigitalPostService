@@ -32,8 +32,14 @@ func BuildSync(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Sy
 	if err != nil {
 		return nil, err
 	}
+	return &SyncApp{Store: st, Engine: BuildEngine(st, cfg, logger)}, nil
+}
+
+// BuildEngine 在一个已打开的 Store 上构造同步 Engine，供与读路径共享同一
+// 连接池的入口（cmd/server）复用。
+func BuildEngine(st *store.Store, cfg config.Config, logger *slog.Logger) *syncpkg.Engine {
 	fetcher := syncpkg.NewHTTPFetcher(cfg.DownloadTimeout, cfg.DownloadMaxRetry, cfg.DownloadBackoff, logger)
-	engine := syncpkg.NewEngine(st.Addresses(), st.SyncRuns(), st.Locker(), fetcher, syncpkg.Options{
+	return syncpkg.NewEngine(st.Addresses(), st.SyncRuns(), st.Locker(), fetcher, syncpkg.Options{
 		FullURL:            cfg.SyncFullURL,
 		AddURLTemplate:     cfg.SyncAddURLTemplate,
 		DelURLTemplate:     cfg.SyncDelURLTemplate,
@@ -43,5 +49,4 @@ func BuildSync(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Sy
 		DiffFallbackFull:   cfg.SyncDiffFallback,
 		DiffLookbackMonths: cfg.SyncDiffLookback,
 	}, logger)
-	return &SyncApp{Store: st, Engine: engine}, nil
 }

@@ -61,7 +61,7 @@ func Open(ctx context.Context, opt Options) (*Store, error) {
 	}
 
 	s := &Store{db: db}
-	if err := s.migrate(); err != nil {
+	if err := migrate(db); err != nil {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 	return s, nil
@@ -91,8 +91,8 @@ func ping(ctx context.Context, db *gorm.DB, timeout time.Duration) error {
 	return sqlDB.PingContext(cctx)
 }
 
-func (s *Store) migrate() error {
-	return s.db.AutoMigrate(&domain.Address{}, &domain.SyncRun{}, &syncLockRow{})
+func migrate(db *gorm.DB) error {
+	return db.AutoMigrate(&domain.Address{}, &domain.SyncRun{}, &syncLockRow{})
 }
 
 // Addresses 返回地址 repository。

@@ -216,6 +216,7 @@
 │   ├── config/               # 配置加载
 │   ├── domain/               # 领域模型/接口
 │   ├── store/                # repository（GORM，3 方言）
+│   ├── query/                # 查询 service（超时/上限/截断/状态语义；task-0005）
 │   ├── server/               # http 装配、中间件
 │   ├── auth/                 # token 校验/发行
 │   ├── sync/                 # downloader/parser/applier/recorder
