@@ -244,12 +244,10 @@
 
 - **可复用测试**：核心逻辑（parser / applier / engine / query / auth / crypto / store）均有单元与集成测试，跑 SQLite，无外部依赖。端到端链路（同步 fixture → 查询 → token 鉴权）见 `internal/e2e`；边界 fixture 见 `internal/sync/testdata`。
 - **CI / 一键脚本**：`.github/workflows/ci.yml`（Go fmt/vet/build/test + 灵魂文件一致 + OpenAPI 校验）；本地 `make ci` / `scripts/ci.sh` 等价复现。
+- **已装配**：同步状态/历史/手动触发端点 `/v1/sync/*` 已挂载到 `cmd/server`（`status`/`runs` 需 read，`trigger` 需 admin，复用同一引擎与 DB 锁）；查询端点 `/v1/addresses*` 与 `/v1/sync/status`、`/v1/sync/runs` 走真实 Bearer 鉴权（缺失/无效/过期/吊销 → 401，scope 不足 → 403）。
 - **已知实现缺口**（spec/openapi 已标注，分别归属后续 task，非本任务范围）：
-  1. 同步状态 HTTP 端点 `/v1/sync/*` 契约就位但未装配 → task-0008。
-  2. 查询端点 `/v1/addresses*` 鉴权为放行占位（token 管理端点已真实鉴权）→ 装配收口。
-  3. `TokenRepository` 为进程内 `MemoryStore`，重启丢失 → task-0002 GORM store 替换。
-  4. PG/MySQL 方言未实现（`store.open()` 返回 not-implemented），多方言 CI 矩阵阻塞于此 → task-0002。
-  5. React 前端与前端交互测试 → task-0009。
+  1. PG/MySQL 方言未实现（`store.open()` 返回 not-implemented），多方言 CI 矩阵阻塞于此 → task-0002。
+  2. React 前端与前端交互测试 → task-0009。
 - 选型说明：实际 HTTP 路由采用标准库 `net/http`（Go 1.22 method 路由）而非 §3 表中规划的 chi/oapi-codegen，以保持零额外依赖；openapi.yaml 仍为 spec-first 契约源。
 
 变更本架构需在本文件记录并在 issue 同步。

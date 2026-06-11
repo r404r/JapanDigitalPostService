@@ -1,12 +1,14 @@
 // Command server 启动 JapanDigitalPostService 的 HTTP API。
 //
-// 当前已装配：GET /v1/health（无需认证）、地址查询读路径（task-0005）、
-// token 管理端点（admin scope，task-0006）、可选的应用层载荷加密中间件、
-// 可选的进程内同步调度（task-0004），以及优雅关闭。读路径与同步引擎共享
-// 同一 Store / 连接池；同步状态路由由 task-0008 接入。
+// 当前已装配：GET /v1/health（无需认证）、地址查询读路径（read scope）、
+// 同步状态/历史/手动触发端点（/v1/sync/status、/v1/sync/runs 需 read，
+// /v1/sync/trigger 需 admin）、token 管理端点（admin scope）、可选的应用层
+// 载荷加密中间件、可选的进程内同步调度，以及优雅关闭。读路径、同步状态查询
+// 与同步引擎共享同一 Store / 连接池。
 //
-// 注：查询端点的 Bearer 校验仍为 internal/server 的占位中间件（放行），
-// 与 token 管理端点的真实鉴权在后续装配 task 收口（见 spec §5.1）。
+// 鉴权：查询与同步状态端点经 auth.Service.RequireScope(read) 做真实 Bearer
+// token 校验（缺失/无效/过期/吊销 → 401）；写端点（token 管理、手动触发）
+// 要求 admin scope（见 spec §5.1）。
 package main
 
 import (
@@ -68,9 +70,12 @@ func main() {
 		}
 	}
 
+	// 同步引擎：与读路径共享同一 Store / 连接池。供手动触发端点
+	// (/v1/sync/trigger) 与可选的进程内调度复用，保证单写者与行为一致。
+	engine := app.BuildEngine(st, cfg, logger)
+
 	// 可选的进程内同步调度：开启时按 SYNC_CRON 周期触发 auto 同步。
 	if cfg.SyncSchedulerOn {
-		engine := app.BuildEngine(st, cfg, logger)
 		if sch, err := syncpkg.NewScheduler(engine, cfg.SyncCron, logger); err != nil {
 			logger.Error("sync scheduler disabled: bad SYNC_CRON", "spec", cfg.SyncCron, "err", err)
 		} else {
@@ -97,19 +102,35 @@ func main() {
 	}
 	tokenHandlers := auth.NewHandlers(authSvc)
 
-	// 查询读路径（health + /v1/addresses*，含 request-id 与占位认证中间件）。
+	// 查询读路径（health + /v1/addresses*）。数据端点套真实 Bearer 校验（read scope）；
+	// health 始终免认证。
 	reader := store.NewAddressReadRepo(sqlDB)
 	svc := query.NewService(reader, cfg.FuzzyLimit, cfg.MaxTotal)
 	router := server.NewRouter(server.Options{
 		QueryService: svc,
 		QueryTimeout: cfg.QueryTimeout,
 		Logger:       logger,
+		AuthMiddleware: func(next http.Handler) http.Handler {
+			return authSvc.RequireScope(domain.ScopeRead, next)
+		},
 	})
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /v1/health", router)
 	mux.Handle("GET /v1/addresses", router)
 	mux.Handle("GET /v1/addresses/{zipcode}", router)
+
+	// 同步状态/历史/触发端点：status/runs 需 read，trigger 需 admin。
+	syncHandlers := server.NewSyncHandlers(server.SyncOptions{
+		Runs:         st.SyncRuns(),
+		Reader:       reader,
+		Runner:       engine,
+		QueryTimeout: cfg.QueryTimeout,
+		Logger:       logger,
+	})
+	mux.Handle("GET /v1/sync/status", authSvc.RequireScope(domain.ScopeRead, http.HandlerFunc(syncHandlers.GetStatus)))
+	mux.Handle("GET /v1/sync/runs", authSvc.RequireScope(domain.ScopeRead, http.HandlerFunc(syncHandlers.ListRuns)))
+	mux.Handle("POST /v1/sync/trigger", authSvc.RequireScope(domain.ScopeAdmin, http.HandlerFunc(syncHandlers.Trigger)))
 
 	// Token 管理端点：均要求 admin scope。
 	mux.Handle("POST /v1/tokens", authSvc.RequireScope(domain.ScopeAdmin, http.HandlerFunc(tokenHandlers.CreateToken)))

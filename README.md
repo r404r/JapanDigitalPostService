@@ -13,11 +13,10 @@
 ## 现状
 
 后端核心已落地并经测试覆盖：多数据库存储层（SQLite 已实现，PG/MySQL 接口就位）、`utf_ken_all` 解析、
-全量/差分同步引擎（幂等、调度、DB 锁）、地址查询读路径（超时/上限/截断状态）、token 认证与发行、可选载荷加密。
+全量/差分同步引擎（幂等、调度、DB 锁）、地址查询读路径（超时/上限/截断状态）、同步状态/历史/手动触发
+端点（`/v1/sync/*`）、查询与同步状态端点的真实 Bearer 鉴权、token 认证与发行、可选载荷加密。
 
-尚未接入（见 `docs/tasks/`）：同步状态 API 端点装配（task-0008）、React 前端（task-0009）、
-PG/MySQL 方言实现与多方言 CI 矩阵（task-0002）、查询端点的真实 Bearer 鉴权（当前为放行占位）。
-详见 [`docs/tasks/task-0010-e2e-hardening.md`](docs/tasks/task-0010-e2e-hardening.md) 的收口复核发现。
+尚未接入（见 `docs/tasks/`）：React 前端（task-0009）、PG/MySQL 方言实现与多方言 CI 矩阵（task-0002）。
 
 ## 快速开始
 
@@ -70,14 +69,25 @@ go run ./cmd/batch --type diff    # 强制差分（回看窗口内的 add/del）
 # 用一个引导 admin token 启动 server
 ADMIN_BOOTSTRAP_TOKEN=jdps_local_admin_example_token make run   # 监听 :8080
 
-curl localhost:8080/v1/health
+curl localhost:8080/v1/health      # 免认证
 # {"status":"ok","version":"..."}
 
+# 查询/同步状态端点需 read 或 admin token（admin 隐含 read，下例直接用引导 admin token）
+A="Authorization: Bearer jdps_local_admin_example_token"
+
 # 按邮编查询（一个邮编可对应多町域，返回 address_count）
-curl "localhost:8080/v1/addresses/1000001"
+curl -H "$A" "localhost:8080/v1/addresses/1000001"
 
 # 模糊/条件查询（zipcode 前缀 / 都道府県 / 市区町村 / q 关键字；最多 20 条 + total_count）
-curl "localhost:8080/v1/addresses?prefecture=東京都&limit=20"
+curl -H "$A" "localhost:8080/v1/addresses?prefecture=東京都&limit=20"
+
+# 同步状态 / 历史（read 或 admin）
+curl -H "$A" localhost:8080/v1/sync/status
+curl -H "$A" "localhost:8080/v1/sync/runs?limit=20"
+
+# 手动触发同步（admin；type=full|diff）；已有同步在跑返回 409 sync_running
+curl -X POST -H "$A" -H "Content-Type: application/json" \
+  -d '{"type":"full"}' localhost:8080/v1/sync/trigger
 
 # 发行一个 read token（admin scope，明文仅返回一次）
 curl -X POST localhost:8080/v1/tokens \
@@ -89,8 +99,8 @@ curl localhost:8080/v1/tokens -H "Authorization: Bearer jdps_local_admin_example
 curl -X DELETE localhost:8080/v1/tokens/<id> -H "Authorization: Bearer jdps_local_admin_example_token"  # 吊销
 ```
 
-> 注：`/v1/addresses*` 当前为放行占位鉴权，token 管理端点已是真实 admin 鉴权；
-> 查询端点 Bearer 校验与同步状态端点（`/v1/sync/*`）的装配见 task-0006 收口 / task-0008。
+> 注：`/v1/addresses*` 与 `/v1/sync/status`、`/v1/sync/runs` 需 `read` 或 `admin` token；
+> `/v1/sync/trigger` 与 token 管理端点需 `admin`。缺失/无效/过期/吊销 token → 401，scope 不足 → 403。
 
 ### 5. 多方言验证（PostgreSQL / MySQL）
 
