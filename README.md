@@ -7,6 +7,7 @@
 - 架构设计: [`docs/architecture.md`](docs/architecture.md)
 - 功能规格: [`docs/spec.md`](docs/spec.md)
 - API 文档: [`docs/api/`](docs/api/)（人读版） / [`api/openapi.yaml`](api/openapi.yaml)（OpenAPI 契约源）
+- UI 使用手册: [`docs/guide/`](docs/guide/)
 - 任务拆解: [`docs/tasks/`](docs/tasks/)（含 [索引](docs/tasks/README.md)）
 - Agent 工作约定: [`AGENTS.md`](AGENTS.md) / [`CLAUDE.md`](CLAUDE.md)（同一份）
 
@@ -168,6 +169,7 @@ npm run dev --prefix web     # http://localhost:5173（dev server 代理后端 :
 
 画面包含：地址查询页（read token），后台管理区——触发同步（自动 / 强制全量 / 强制差分）、
 同步状态与历史、token 发行/管理（admin token）。明文 token 仅创建时展示一次，前端只存于 sessionStorage。
+截图付き操作说明见 [`docs/guide/`](docs/guide/)。
 
 ### 6. 全功能手工测试（容器）
 

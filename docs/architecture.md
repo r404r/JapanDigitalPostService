@@ -228,8 +228,9 @@
 ├── migrations/               # 可移植 SQL 迁移
 ├── web/                      # React sample 前端
 ├── deployments/              # docker-compose 等
-├── docs/                     # architecture / spec / api / tasks
-│   └── api/                  # 人读版 API 规格（OpenAPI 的 companion docs）
+├── docs/                     # architecture / spec / api / guide / tasks
+│   ├── api/                  # 人读版 API 规格（OpenAPI 的 companion docs）
+│   └── guide/                # UI 使用手册与截图
 └── Makefile
 ```
 

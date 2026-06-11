@@ -162,6 +162,7 @@
 `web/` 提供 Vite + React + TypeScript sample。后端默认在 `localhost:8080`，开发服务器通过 `/v1` 代理访问 API。
 生产构建产物可通过 `STATIC_DIR` 由 Go 服务托管；此时前端同源调用 `/v1`，无需单独配置 API base。
 视觉风格参考日本邮便番号検索表单：淡蓝背景、深海军蓝标题与主按钮、大尺寸输入框、清晰深色边框、红色描边错误提示。字体采用日文显示友好的本机字体栈，优先使用 `Noto Sans JP` / `Hiragino Sans` / `Yu Gothic UI` / `Yu Gothic` / `Meiryo`，不依赖外部 webfont。
+面向用户的截图付き操作说明落盘在 `docs/guide/`，作为 sample UI 的使用手册。
 
 三个页面（最小可用）：
 1. **查询页**：输入邮编/都道府県/市区町村/关键字，展示结果表、OpenAPI 字段 `total_count` / `returned_count` / `items`，并可展示 `items.length` 作为本次返回地址数量；同时展示 `truncated`/`too_many_results`/`timeout` 状态提示。
@@ -219,3 +220,4 @@
 | 2026-06-11 | task-0013 | React sample 改用日文字体优先的本机字体栈，并将管理页同期操作拆成“状态再読込”和“選択した方式で同期実行”两个明确区域，消除下拉框适用范围歧义。无 OpenAPI 变更。 |
 | 2026-06-11 | task-0014 | 优化 React sample 管理页 Token 表单的输入区与按钮区间距，并将按钮声明为独立操作组，改善可扫读性。无 OpenAPI 变更。 |
 | 2026-06-11 | task-0015 | 新增 `docs/api/` 人读版 API 规格，补齐 OpenAPI read/admin 端点 403 响应声明，并强化 task 收口时的 README/spec/architecture/API 文档影响判定规则。 |
+| 2026-06-11 | task-0016 | 新增 `docs/guide/` UI 使用手册与截图，覆盖搜索、同期管理、Token 管理、scope 差异与故障排查；README/architecture 增加文档入口。无 OpenAPI 变更。 |

@@ -32,3 +32,14 @@ Squad leader 按依赖逐个分派；backlog 任务不要一次性全部并行�
 | 7 | 0010 | 收尾 |
 
 高风险任务（0004/0005/0006/0007）严格遵循"先设计后实现"：行为已在 `spec.md` / `architecture.md` 固定，实现不得偏离，偏离需先改 spec。
+
+## 后续维护任务
+
+| task | 内容 |
+|---|---|
+| [0011](task-0011-sync-history-reload.md) | 同期履歴刷新后从后端持久化记录恢复。 |
+| [0012](task-0012-manual-test-docs-and-postal-ui.md) | 手工测试容器文档、ignore hygiene、邮便番号検索风格 UI。 |
+| [0013](task-0013-japanese-font-sync-ux.md) | 日文字体优化与同期管理操作关系澄清。 |
+| [0014](task-0014-token-form-spacing.md) | Token 管理表单间距优化。 |
+| [0015](task-0015-api-docs-and-task-doc-gate.md) | API 人读版文档与 task 文档影响判定规则。 |
+| [0016](task-0016-ui-guide.md) | UI 使用手册与截图。 |
