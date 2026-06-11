@@ -86,7 +86,7 @@
 ### 3.4 同步状态
 - `GET /v1/sync/status`：当前数据量、最近一次成功同步时间/类型、是否正在运行。
 - `GET /v1/sync/runs?limit=&offset=`：历史运行记录（`sync_runs`），含类型、状态、计数、耗时、错误。
-- `POST /v1/sync/trigger`（admin）：手动触发，body `{ "type": "full" | "diff" }`，返回 run id。
+- `POST /v1/sync/trigger`（admin）：手动触发，body `{ "type": "auto" | "full" | "diff" }`，返回 run id。`auto` = 库空走 full、否则 diff（引擎按当前地址条数解析）；`full` = 强制全量重建；`diff` = 强制差分。落库的 `SyncRun.type` 始终是 `full` 或 `diff`（`auto` 仅为触发入参，不落库），`202` 返回的运行记录即解析后的真实类型。
 
 > 实现现状：以上三端点已挂载到 `cmd/server`（经 `internal/server.NewRouter` 统一装配）。`GET /v1/sync/status`（`total_addresses`/`running`/`last_success_at`/`last_type`）与 `GET /v1/sync/runs` 需 `read`|`admin`；`POST /v1/sync/trigger` 仅 `admin`，**异步执行**（全量可达分钟级，不占住请求）并立即以 `202` 返回创建的 `running` 运行记录，已有同步在跑时返回 `sync_running`/409。进程内 cron（`SYNC_CRON`）与独立入口 `cmd/batch --type auto|full|diff` 仍可用，与触发端点共用同一引擎与 DB 锁。
 
@@ -209,3 +209,4 @@
 | 2026-06-11 | task-0007 | 实现 React sample 查询、同步状态/历史、token 发行/管理页面与前端验证范围 |
 | 2026-06-11 | task-0010 (端到端收尾) | 收口复核 spec/openapi↔实现：§3.4 标注同步状态端点契约就位但待 task-0008 装配。新增端到端测试（同步 fixture→查询→token 鉴权）、可复用边界 fixture、一键脚本 `scripts/ci.sh`、CI OpenAPI 校验 job；openapi 为 `/sync/status`、`/sync/runs` 补 401。无行为变更。 |
 | 2026-06-11 | GHO-36 (装配收口) | 挂载 `/v1/sync/{status,runs,trigger}`（§3.4），并为查询/同步端点接入真实 Bearer 鉴权（§3.2/§5.1）：移除 `internal/server` 占位放行中间件，经 `server.Options` 注入 `Authorizer`/`TokenHandlers`/`SyncTrigger`，由 `cmd/server` 传入 `auth.Service`/engine——查询与 sync 状态需 `read`\|`admin`，trigger 与 token 管理仅 `admin`。trigger 经新增 `Engine.TriggerAsync` 异步执行（立即 202 返回 `running` run id，已有同步在跑返回 `sync_running`/409）。全部 /v1 路由统一在 `server.NewRouter` 装配，`cmd/server` 与 `internal/e2e` 共用同一入口；e2e 改为覆盖鉴权边界（无 token 401→read 查询→read 触发 403→admin 触发→status/runs 可见），并补 sync handler 单测。无 openapi 契约变更。 |
+| 2026-06-11 | GHO-37 (后端契约扩展) | `POST /v1/sync/trigger` 入参类型由 `full\|diff` 扩展为 `auto\|full\|diff`（§3.4）：openapi 请求体 enum 增加 `auto` 并补充各类型语义说明；handler 放行 `auto`（引擎 `resolveType` 已支持，库空→full、否则 diff），落库的 `SyncRun.type` 仍仅 full/diff。补 sync handler 单测覆盖 auto 触发返回解析后的真实类型。无新增依赖。 |

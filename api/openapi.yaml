@@ -95,7 +95,12 @@ paths:
             schema:
               type: object
               properties:
-                type: { type: string, enum: [full, diff] }
+                type:
+                  type: string
+                  enum: [auto, full, diff]
+                  description: >
+                    auto = 库空走 full、否则 diff（引擎解析）；full = 强制全量重建；
+                    diff = 强制差分。落库的 SyncRun.type 始终是 full 或 diff（auto 不落库）。
               required: [type]
       responses:
         '202':

@@ -146,8 +146,9 @@ func (h *handlers) syncTrigger(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	st := domain.SyncType(req.Type)
-	if st != domain.SyncFull && st != domain.SyncDiff {
-		h.writeStatusError(w, r, http.StatusBadRequest, "invalid_request", "type must be full or diff")
+	// auto/full/diff 均为合法入参；auto 由引擎按库空与否解析为 full/diff，落库的 run 始终是 full 或 diff。
+	if st != domain.SyncFull && st != domain.SyncDiff && st != domain.SyncAuto {
+		h.writeStatusError(w, r, http.StatusBadRequest, "invalid_request", "type must be auto, full or diff")
 		return
 	}
 

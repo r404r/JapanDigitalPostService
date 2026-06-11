@@ -206,6 +206,26 @@ func TestSyncTrigger_AdminAccepted(t *testing.T) {
 	}
 }
 
+func TestSyncTrigger_AutoAccepted(t *testing.T) {
+	// auto 是合法入参：handler 原样透传给引擎，引擎按库空与否解析为 full/diff，
+	// 202 返回解析后的真实 run（type 始终是 full 或 diff，不会是 auto）。
+	tr := &fakeTrigger{run: &domain.SyncRun{ID: "run-auto", Type: domain.SyncDiff, Status: domain.StatusRunning}}
+	h, admin, _ := newSyncRouter(t, Options{SyncTrigger: tr})
+
+	rec := doAuth(t, h, "POST", "/v1/sync/trigger", admin, `{"type":"auto"}`)
+	if rec.Code != 202 {
+		t.Fatalf("code=%d, want 202", rec.Code)
+	}
+	if !tr.called || tr.gotType != domain.SyncAuto {
+		t.Errorf("trigger called=%v type=%v, want true/auto", tr.called, tr.gotType)
+	}
+	var body syncRunDTO
+	_ = json.NewDecoder(rec.Body).Decode(&body)
+	if body.ID != "run-auto" || body.Type != "diff" {
+		t.Errorf("response id=%s type=%s, want run-auto/diff (resolved)", body.ID, body.Type)
+	}
+}
+
 func TestSyncTrigger_ReadForbidden(t *testing.T) {
 	tr := &fakeTrigger{run: &domain.SyncRun{ID: "x"}}
 	h, _, read := newSyncRouter(t, Options{SyncTrigger: tr})
@@ -242,7 +262,7 @@ func TestSyncTrigger_Conflict(t *testing.T) {
 func TestSyncTrigger_BadType(t *testing.T) {
 	tr := &fakeTrigger{run: &domain.SyncRun{}}
 	h, admin, _ := newSyncRouter(t, Options{SyncTrigger: tr})
-	for _, payload := range []string{`{"type":"auto"}`, `{"type":""}`, `{}`, `{"type":"full","x":1}`, `not json`} {
+	for _, payload := range []string{`{"type":"weekly"}`, `{"type":""}`, `{}`, `{"type":"full","x":1}`, `not json`} {
 		rec := doAuth(t, h, "POST", "/v1/sync/trigger", admin, payload)
 		if rec.Code != 400 {
 			t.Errorf("payload %q: code=%d, want 400", payload, rec.Code)
