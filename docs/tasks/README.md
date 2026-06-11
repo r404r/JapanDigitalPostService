@@ -43,3 +43,4 @@ Squad leader 按依赖逐个分派；backlog 任务不要一次性全部并行�
 | [0014](task-0014-token-form-spacing.md) | Token 管理表单间距优化。 |
 | [0015](task-0015-api-docs-and-task-doc-gate.md) | API 人读版文档与 task 文档影响判定规则。 |
 | [0016](task-0016-ui-guide.md) | UI 使用手册与截图。 |
+| [0017](task-0017-sync-trigger-shutdown.md) | 手动同步触发的 shutdown 跟踪。 |

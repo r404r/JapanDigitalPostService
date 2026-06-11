@@ -89,6 +89,7 @@
 - `POST /v1/sync/trigger`（admin）：手动触发，body `{ "type": "auto" | "full" | "diff" }`，返回 run id。`auto` = 库空走 full、否则 diff（引擎按当前地址条数解析）；`full` = 强制全量重建；`diff` = 强制差分。落库的 `SyncRun.type` 始终是 `full` 或 `diff`（`auto` 仅为触发入参，不落库），`202` 返回的运行记录即解析后的真实类型。
 
 > 实现现状：以上三端点已挂载到 `cmd/server`（经 `internal/server.NewRouter` 统一装配）。`GET /v1/sync/status`（`total_addresses`/`running`/`last_success_at`/`last_type`）与 `GET /v1/sync/runs` 需 `read`|`admin`；`POST /v1/sync/trigger` 仅 `admin`，**异步执行**（全量可达分钟级，不占住请求）并立即以 `202` 返回创建的 `running` 运行记录，已有同步在跑时返回 `sync_running`/409。进程内 cron（`SYNC_CRON`）与独立入口 `cmd/batch --type auto|full|diff` 仍可用，与触发端点共用同一引擎与 DB 锁。
+> server 优雅关闭时会取消并等待手动触发的后台同步；被 shutdown 取消的运行记录应从 `running` 收敛为 `failed`，错误摘要记录取消原因。
 
 ### 3.5 Token 管理（admin scope）
 - `POST /v1/tokens` body `{ "name": "...", "scope": "read|admin", "ttl_seconds": 86400 }` → `201`，**仅此一次**返回明文 `token`。`ttl_seconds` 可选（正整数）；省略则永不过期，置位则响应含 `expires_at`。
@@ -221,3 +222,4 @@
 | 2026-06-11 | task-0014 | 优化 React sample 管理页 Token 表单的输入区与按钮区间距，并将按钮声明为独立操作组，改善可扫读性。无 OpenAPI 变更。 |
 | 2026-06-11 | task-0015 | 新增 `docs/api/` 人读版 API 规格，补齐 OpenAPI read/admin 端点 403 响应声明，并强化 task 收口时的 README/spec/architecture/API 文档影响判定规则。 |
 | 2026-06-11 | task-0016 | 新增 `docs/guide/` UI 使用手册与截图，覆盖搜索、同期管理、Token 管理、scope 差异与故障排查；README/architecture 增加文档入口。无 OpenAPI 变更。 |
+| 2026-06-11 | task-0017 | 修复 Claude Review #5：`TriggerAsync` 后台同步由 Engine root context/WaitGroup 跟踪，server shutdown 时取消并等待；取消中的 `sync_runs` 记录会收敛为 `failed`。无 OpenAPI 变更。 |

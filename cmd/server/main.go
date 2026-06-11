@@ -154,4 +154,10 @@ func main() {
 		logger.Error("graceful shutdown failed", "err", err)
 		os.Exit(1)
 	}
+	syncCtx, syncCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer syncCancel()
+	if err := engine.Shutdown(syncCtx); err != nil {
+		logger.Error("sync engine shutdown failed", "err", err)
+		os.Exit(1)
+	}
 }

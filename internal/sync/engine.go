@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	stdsync "sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -38,6 +39,10 @@ type Engine struct {
 	// now / newID 可注入，便于测试确定性。
 	now   func() time.Time
 	newID func() string
+
+	asyncCtx    context.Context
+	asyncCancel context.CancelFunc
+	asyncWG     stdsync.WaitGroup
 }
 
 // NewEngine 构造引擎。
@@ -51,15 +56,18 @@ func NewEngine(addresses domain.AddressRepository, runs domain.SyncRunRepository
 	if opt.DiffLookbackMonths <= 0 {
 		opt.DiffLookbackMonths = 3
 	}
+	asyncCtx, asyncCancel := context.WithCancel(context.Background())
 	return &Engine{
-		addresses: addresses,
-		runs:      runs,
-		locker:    locker,
-		fetcher:   fetcher,
-		opt:       opt,
-		logger:    logger,
-		now:       time.Now,
-		newID:     func() string { return uuid.NewString() },
+		addresses:   addresses,
+		runs:        runs,
+		locker:      locker,
+		fetcher:     fetcher,
+		opt:         opt,
+		logger:      logger,
+		now:         time.Now,
+		newID:       func() string { return uuid.NewString() },
+		asyncCtx:    asyncCtx,
+		asyncCancel: asyncCancel,
 	}
 }
 
@@ -97,10 +105,13 @@ func (e *Engine) Run(ctx context.Context, reqType domain.SyncType, trigger domai
 // （status=running），供 HTTP 触发端点在不占住请求（全量可达分钟级）的前提下
 // 回传 run id。已有同步在运行时返回 domain.ErrSyncRunning（映射到 409）。
 //
-// 后台执行使用独立的 context.Background()，不受触发请求生命周期影响；锁在后台
+// 后台执行不受触发请求生命周期影响，但受 Engine.Shutdown 取消与等待；锁在后台
 // 执行结束后释放。返回值是创建时刻的快照，与后台 goroutine 各持一份，避免并发读写。
 func (e *Engine) TriggerAsync(reqType domain.SyncType, trigger domain.SyncTrigger) (*domain.SyncRun, error) {
-	ctx := context.Background()
+	ctx := e.asyncCtx
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	holder := e.holder()
 	release, ok, err := e.locker.Acquire(ctx, holder)
 	if err != nil {
@@ -128,11 +139,30 @@ func (e *Engine) TriggerAsync(reqType domain.SyncType, trigger domain.SyncTrigge
 	}
 
 	snapshot := *run // 创建时刻快照，返回给调用方；后台 goroutine 持原指针，二者互不共享。
+	e.asyncWG.Add(1)
 	go func() {
+		defer e.asyncWG.Done()
 		defer releaseOnce()
-		_ = e.execute(context.Background(), run, syncType, start)
+		_ = e.execute(ctx, run, syncType, start)
 	}()
 	return &snapshot, nil
+}
+
+// Shutdown 取消 TriggerAsync 启动的后台同步任务，并等待它们退出。用于 server
+// 优雅关闭；cmd/batch 的同步 Run 由调用方传入的 context 控制，不归这里管理。
+func (e *Engine) Shutdown(ctx context.Context) error {
+	e.asyncCancel()
+	done := make(chan struct{})
+	go func() {
+		e.asyncWG.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // resolveType 把 auto/空 判定为 full（库空）或 diff（库非空）；显式 full/diff 原样返回。
@@ -200,7 +230,13 @@ func (e *Engine) execute(ctx context.Context, run *domain.SyncRun, syncType doma
 		e.logger.Info("sync succeeded", "run_id", run.ID, "type", run.Type,
 			"added", res.Added, "updated", res.Updated, "deleted", res.Deleted, "total", res.Total)
 	}
-	if uerr := e.runs.Update(ctx, run); uerr != nil {
+	updateCtx := ctx
+	var cancel context.CancelFunc
+	if ctx.Err() != nil {
+		updateCtx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+	}
+	if uerr := e.runs.Update(updateCtx, run); uerr != nil {
 		e.logger.Error("update sync run", "run_id", run.ID, "err", uerr)
 		if err == nil {
 			err = uerr

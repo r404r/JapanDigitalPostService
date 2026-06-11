@@ -30,6 +30,16 @@ func (f *fakeFetcher) Fetch(_ context.Context, url string) (*SourceFile, error) 
 	}, nil
 }
 
+type blockingFetcher struct {
+	started chan struct{}
+}
+
+func (f *blockingFetcher) Fetch(ctx context.Context, url string) (*SourceFile, error) {
+	close(f.started)
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
 const (
 	rowA = `01101,"060  ","0600000","ホッカイドウ","サッポロシチュウオウク","イカニケイサイガナイバアイ","北海道","札幌市中央区","以下に掲載がない場合",0,0,0,0,0,0`
 	rowB = `01101,"064  ","0640941","ホッカイドウ","サッポロシチュウオウク","アサヒガオカ","北海道","札幌市中央区","旭ケ丘",0,0,1,0,0,0`
@@ -333,5 +343,51 @@ func TestEngineTriggerAsyncConcurrentRejected(t *testing.T) {
 
 	if _, err := e.TriggerAsync(domain.SyncFull, domain.TriggerManual); !errors.Is(err, domain.ErrSyncRunning) {
 		t.Fatalf("want ErrSyncRunning, got %v", err)
+	}
+}
+
+func TestEngineShutdownCancelsTriggerAsyncAndMarksRunFailed(t *testing.T) {
+	st := openTestStore(t)
+	fetcher := &blockingFetcher{started: make(chan struct{})}
+	e := NewEngine(st.Addresses(), st.SyncRuns(), st.Locker(), fetcher, Options{
+		FullURL:   "full",
+		BatchSize: 2,
+	}, nil)
+
+	run, err := e.TriggerAsync(domain.SyncFull, domain.TriggerManual)
+	if err != nil {
+		t.Fatalf("TriggerAsync: %v", err)
+	}
+	select {
+	case <-fetcher.started:
+	case <-time.After(time.Second):
+		t.Fatal("fetcher did not start")
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := e.Shutdown(shutdownCtx); err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+
+	latest, err := st.SyncRuns().Latest(context.Background())
+	if err != nil {
+		t.Fatalf("Latest: %v", err)
+	}
+	if latest == nil || latest.ID != run.ID {
+		t.Fatalf("latest = %+v, want run %s", latest, run.ID)
+	}
+	if latest.Status != domain.StatusFailed {
+		t.Fatalf("status = %s, want failed", latest.Status)
+	}
+	if !strings.Contains(latest.ErrorMessage, "context canceled") {
+		t.Fatalf("error = %q, want context canceled", latest.ErrorMessage)
+	}
+	running, err := st.SyncRuns().CountRunning(context.Background())
+	if err != nil {
+		t.Fatalf("CountRunning: %v", err)
+	}
+	if running != 0 {
+		t.Fatalf("running = %d, want 0", running)
 	}
 }
