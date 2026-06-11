@@ -24,17 +24,13 @@ export type Address = {
 export type SearchResult = {
   status: "ok" | "too_many_results" | "timeout";
   total_count: number;
-  returned?: number;
-  returned_count?: number;
-  address_count?: number;
+  returned: number;
   truncated?: boolean;
-  items?: Address[];
-  addresses?: Address[];
+  items: Address[];
 };
 
 export type SyncStatus = {
-  total_addresses?: number;
-  address_count?: number;
+  total_addresses: number;
   running: boolean;
   last_success_at: string | null;
   last_type: "full" | "diff" | null;
@@ -49,7 +45,6 @@ export type SyncRun = {
   rows_updated?: number;
   rows_deleted?: number;
   rows_total?: number;
-  processed_count?: number;
   started_at: string;
   finished_at: string | null;
   error_message?: string | null;
@@ -174,11 +169,31 @@ export function normalizeError(payload: unknown, httpStatus?: number): ApiError 
     };
   }
 
+  const status = fallbackStatus(httpStatus);
   return {
-    status: httpStatus === 401 ? "unauthorized" : "internal_error",
-    message: defaultErrorMessage(httpStatus === 401 ? "unauthorized" : undefined),
+    status,
+    message: defaultErrorMessage(status),
     httpStatus
   };
+}
+
+function fallbackStatus(httpStatus?: number): ApiError["status"] {
+  switch (httpStatus) {
+    case 400:
+      return "invalid_request";
+    case 401:
+      return "unauthorized";
+    case 403:
+      return "forbidden";
+    case 404:
+      return "not_found";
+    case 429:
+      return "rate_limited";
+    case 504:
+      return "timeout";
+    default:
+      return "internal_error";
+  }
 }
 
 export function defaultErrorMessage(status?: string) {

@@ -26,8 +26,7 @@ describe("App", () => {
       jsonResponse({
         status: "ok",
         total_count: 2,
-        returned_count: 2,
-        address_count: 2,
+        returned: 1,
         truncated: false,
         items: [
           {
@@ -48,8 +47,8 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("button", { name: "検索実行" }));
 
     expect(await screen.findByText("total_count")).toBeInTheDocument();
-    expect(screen.getByText("returned_count")).toBeInTheDocument();
-    expect(screen.getByText("address_count")).toBeInTheDocument();
+    expect(screen.getByText("returned")).toBeInTheDocument();
+    expect(screen.getByText("items.length")).toBeInTheDocument();
     expect(screen.getByText("東京都")).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith(
       expect.stringContaining("/v1/addresses?zipcode=1000001"),
@@ -112,6 +111,38 @@ describe("App", () => {
     expect(await screen.findByText("結果が多すぎます。都道府県や市区町村で条件を絞ってください。")).toBeInTheDocument();
   });
 
+  it("shows timeout state from response status and timeout errors", async () => {
+    sessionStorage.setItem("apiToken", "read-token");
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          status: "timeout",
+          total_count: 0,
+          returned: 0,
+          truncated: false,
+          items: []
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            status: "timeout",
+            message: "query timed out"
+          },
+          { status: 504 }
+        )
+      );
+
+    render(<App />);
+    await userEvent.type(screen.getByLabelText("市区町村"), "千代田区");
+    await userEvent.click(screen.getByRole("button", { name: "検索実行" }));
+    expect(await screen.findByText("検索がタイムアウトしました。条件を絞って再試行してください。")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "検索実行" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("timeout");
+    expect(screen.getByRole("alert")).toHaveTextContent("query timed out");
+  });
+
   it("shows sync status and run history", async () => {
     sessionStorage.setItem("apiToken", "admin-token");
     vi.mocked(fetch)
@@ -145,7 +176,7 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("button", { name: "同期" }));
     await userEvent.click(screen.getByRole("button", { name: "再読込" }));
 
-    expect(await screen.findByText("address_count")).toBeInTheDocument();
+    expect(await screen.findByText("total_addresses")).toBeInTheDocument();
     expect(screen.getAllByText("full").length).toBeGreaterThan(0);
     expect(screen.getByText("success")).toBeInTheDocument();
   });

@@ -87,9 +87,7 @@ function SearchPage({ api, hasToken }: { api: ApiClient; hasToken: boolean }) {
     }
   };
 
-  const addresses = result?.items ?? result?.addresses ?? [];
-  const returned = result?.returned_count ?? result?.returned ?? addresses.length;
-  const addressCount = result?.address_count ?? addresses.length;
+  const addresses = result?.items ?? [];
 
   return (
     <section className="workspace">
@@ -121,8 +119,8 @@ function SearchPage({ api, hasToken }: { api: ApiClient; hasToken: boolean }) {
         <section className="panel">
           <div className="metric-row">
             <Metric label="total_count" value={result.total_count} />
-            <Metric label="returned_count" value={returned} />
-            <Metric label="address_count" value={addressCount} />
+            <Metric label="returned" value={result.returned} />
+            <Metric label="items.length" value={addresses.length} />
           </div>
           <SearchStatus result={result} />
           {addresses.length === 0 ? <EmptyState text="該当する住所はありません。" /> : <AddressTable addresses={addresses} />}
@@ -191,7 +189,7 @@ function SyncPage({ api, hasToken }: { api: ApiClient; hasToken: boolean }) {
       {status && (
         <section className="panel">
           <div className="metric-row">
-            <Metric label="address_count" value={status.address_count ?? status.total_addresses ?? 0} />
+            <Metric label="total_addresses" value={status.total_addresses} />
             <Metric label="running" value={status.running ? "yes" : "no"} />
             <Metric label="last_type" value={status.last_type ?? "-"} />
             <Metric label="last_success_at" value={formatDate(status.last_success_at)} />
@@ -388,7 +386,7 @@ function SyncRunsTable({ runs }: { runs: SyncRun[] }) {
               <td>{run.type}</td>
               <td>{run.status}</td>
               <td>{formatDate(run.started_at)} - {formatDate(run.finished_at)}</td>
-              <td>{run.processed_count ?? run.rows_total ?? countRows(run)}</td>
+              <td>{run.rows_total ?? countRows(run)}</td>
               <td>{run.error_message ?? "-"}</td>
             </tr>
           ))}

@@ -219,5 +219,7 @@ components:
     Error:
       type: object
       properties:
-        status: { type: string }
+        status:
+          type: string
+          enum: [ok, too_many_results, timeout, invalid_request, unauthorized, forbidden, not_found, rate_limited, internal_error, sync_running]
         message: { type: string }

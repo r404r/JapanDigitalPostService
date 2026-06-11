@@ -115,8 +115,8 @@
 `web/` 提供 Vite + React + TypeScript sample。后端默认在 `localhost:8080`，开发服务器通过 `/v1` 代理访问 API。
 
 三个页面（最小可用）：
-1. **查询页**：输入邮编/都道府県/市区町村/关键字，展示结果表、`total_count`、`returned_count`、`address_count`、多个地址对象，以及 `truncated`/`too_many_results`/`timeout` 状态提示。
-2. **同步状态页**：展示当前数据量、最近成功同步时间/类型、是否运行中、运行历史（类型、状态、时间、处理数量、错误摘要），可手动触发 full/diff（admin）。
+1. **查询页**：输入邮编/都道府県/市区町村/关键字，展示结果表、OpenAPI 字段 `total_count` / `returned` / `items`，并可展示 `items.length` 作为本次返回地址数量；同时展示 `truncated`/`too_many_results`/`timeout` 状态提示。
+2. **同步状态页**：展示 `total_addresses`、最近成功同步时间/类型、是否运行中、运行历史（类型、状态、时间、`rows_total` 处理数量、错误摘要），可手动触发 full/diff（admin）。
 3. **Token 页**：发行 token（明文仅展示一次并提示保存）、脱敏列表、吊销（需 admin）。
 
 通用行为：
