@@ -48,6 +48,10 @@ func main() {
 		os.Exit(1)
 	}
 	defer func() { _ = st.Close() }()
+	if err := app.CleanupStaleRunningSyncs(context.Background(), st, logger); err != nil {
+		logger.Error("cleanup stale sync runs failed", "err", err)
+		os.Exit(1)
+	}
 
 	sqlDB, err := st.DB().DB()
 	if err != nil {

@@ -109,7 +109,7 @@
    - **逻辑唯一键 = `(zipcode, jis_code, town, town_kana)`**（决策 task-0004 review）。`town_kana` 是键的一部分：真实全量数据中同一 `(zipcode, jis_code, town)` 可对应多种合法读音（实测 `6730012/28203/和坂`：`カニガサカ` / `ワサカ`），并入 `town_kana` 后两行各自独立、不被唯一索引折叠、不丢记录，且同键两行落入同一 upsert 分块时不再触发 SQLite `ON CONFLICT ... cannot affect row a second time`。差分"改名/变更"仍由 del（旧记录，含旧 kana）+ add（新记录，含新 kana）表达，键变化时由删除+新增收敛，语义不变。
    - **存量库迁移**：唯一索引 `uq_addr` 由 3 列扩为 4 列。GORM `AutoMigrate` 按索引**名**判断存在性、不比对列定义，故对已建过 3 列 `uq_addr` 的存量库不会自动重建——升级存量库需先手工 `DROP INDEX uq_addr` 再启动迁移，或直接清空 `addresses` 触发 auto-full 重建（推荐，邮编为可重导公开数据）。全新部署无需额外处理。
 6. 并发：DB 单行锁（`sync_locks`）保证同一时刻仅一个同步在写；并发触发返回 `sync_running`（HTTP 409）。锁含 TTL（2h），持有进程崩溃后可被抢占，避免永久阻塞。
-7. 失败：记录 `error_message`，分批写 + 删除走事务，不破坏既有数据，在线查询（读路径）不受影响。
+7. 失败：记录 `error_message`，分批写 + 删除走事务，不破坏既有数据，在线查询（读路径）不受影响。server/batch 启动时会把上个进程遗留的 `running` 记录标记为 `failed`，并写入 `finished_at` / `duration_ms` / 安全错误摘要。
 8. 健壮性：下载带单次超时 + 指数退避重试（`DOWNLOAD_*`）、大小校验、zip 完整性校验、记录 checksum/文件大小；DB 连接带超时 + 退避重试（`DB_*`）。
 9. 可扩展：引擎依赖 `domain` repository / `Locker` 接口，无状态，可作为独立 worker 多实例运行；后续替换为 worker/queue 或分布式锁（PG advisory lock）只需换 `Locker` 实现，不改引擎。
 
@@ -223,3 +223,4 @@
 | 2026-06-11 | task-0015 | 新增 `docs/api/` 人读版 API 规格，补齐 OpenAPI read/admin 端点 403 响应声明，并强化 task 收口时的 README/spec/architecture/API 文档影响判定规则。 |
 | 2026-06-11 | task-0016 | 新增 `docs/guide/` UI 使用手册与截图，覆盖搜索、同期管理、Token 管理、scope 差异与故障排查；README/architecture 增加文档入口。无 OpenAPI 变更。 |
 | 2026-06-11 | task-0017 | 修复 Claude Review #5：`TriggerAsync` 后台同步由 Engine root context/WaitGroup 跟踪，server shutdown 时取消并等待；取消中的 `sync_runs` 记录会收敛为 `failed`。无 OpenAPI 变更。 |
+| 2026-06-11 | task-0018 | 修复 Claude Review #6：server/batch 启动时将遗留 `sync_runs.running` 记录标记为 `failed`，补齐 `finished_at`、`duration_ms` 与错误摘要，避免重启后状态长期显示运行中。无 OpenAPI 变更。 |

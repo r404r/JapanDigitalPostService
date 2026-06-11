@@ -133,6 +133,30 @@ func TestSyncRunRepository(t *testing.T) {
 	if n, _ := runs.CountRunning(ctx); n != 1 {
 		t.Errorf("CountRunning = %d, want 1", n)
 	}
+	finished := time.Unix(260, 0)
+	marked, err := runs.MarkRunningFailed(ctx, "process stopped before sync completed", finished)
+	if err != nil {
+		t.Fatalf("MarkRunningFailed: %v", err)
+	}
+	if marked != 1 {
+		t.Fatalf("MarkRunningFailed = %d, want 1", marked)
+	}
+	if n, _ := runs.CountRunning(ctx); n != 0 {
+		t.Errorf("CountRunning after cleanup = %d, want 0", n)
+	}
+	latest, err = runs.Latest(ctx)
+	if err != nil || latest == nil || latest.ID != "2" {
+		t.Fatalf("Latest after cleanup = %+v err=%v, want id 2", latest, err)
+	}
+	if latest.Status != domain.StatusFailed || latest.FinishedAt == nil || !latest.FinishedAt.Equal(finished) {
+		t.Fatalf("cleaned run = %+v, want failed with finished_at", latest)
+	}
+	if latest.DurationMs != finished.Sub(r2.StartedAt).Milliseconds() {
+		t.Fatalf("duration_ms = %d, want %d", latest.DurationMs, finished.Sub(r2.StartedAt).Milliseconds())
+	}
+	if latest.ErrorMessage != "process stopped before sync completed" {
+		t.Fatalf("error_message = %q", latest.ErrorMessage)
+	}
 	list, err := runs.List(ctx, 10, 0)
 	if err != nil || len(list) != 2 || list[0].ID != "2" {
 		t.Fatalf("List = %+v err=%v, want [2,1]", list, err)

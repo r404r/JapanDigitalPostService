@@ -47,6 +47,9 @@ func (f *fakeRuns) List(_ context.Context, limit, offset int) ([]domain.SyncRun,
 	return f.list, f.err
 }
 func (f *fakeRuns) CountRunning(context.Context) (int64, error) { return f.running, f.err }
+func (f *fakeRuns) MarkRunningFailed(context.Context, string, time.Time) (int64, error) {
+	return 0, nil
+}
 
 // fakeTrigger 实现 SyncTrigger。
 type fakeTrigger struct {

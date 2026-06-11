@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"errors"
+	"time"
 )
 
 // ErrSyncRunning 表示已有同步在运行，重复触发应返回该错误（映射到 spec 的
@@ -37,6 +38,8 @@ type SyncRunRepository interface {
 	LatestSuccess(ctx context.Context) (*SyncRun, error)
 	List(ctx context.Context, limit, offset int) ([]SyncRun, error)
 	CountRunning(ctx context.Context) (int64, error)
+	// MarkRunningFailed 将上个进程遗留的 running 记录收敛为 failed。
+	MarkRunningFailed(ctx context.Context, message string, finishedAt time.Time) (int64, error)
 }
 
 // Locker 提供同步互斥锁。当前用 DB 单行锁实现（单实例足够），接口隔离以便后续

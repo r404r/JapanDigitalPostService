@@ -4,7 +4,9 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/r404r/JapanDigitalPostService/internal/config"
 	"github.com/r404r/JapanDigitalPostService/internal/store"
@@ -32,7 +34,29 @@ func BuildSync(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Sy
 	if err != nil {
 		return nil, err
 	}
+	if err := CleanupStaleRunningSyncs(ctx, st, logger); err != nil {
+		_ = st.Close()
+		return nil, err
+	}
 	return &SyncApp{Store: st, Engine: BuildEngine(st, cfg, logger)}, nil
+}
+
+// CleanupStaleRunningSyncs 将上个进程遗留的 running 同步记录标记为 failed。
+// DB 锁有 TTL 可恢复写入互斥；sync_runs 也需要在新进程启动时收敛到终态，
+// 避免状态 API 与管理画面长期显示“运行中”。
+func CleanupStaleRunningSyncs(ctx context.Context, st *store.Store, logger *slog.Logger) error {
+	const message = "process stopped before sync completed"
+	n, err := st.SyncRuns().MarkRunningFailed(ctx, message, time.Now().UTC())
+	if err != nil {
+		return fmt.Errorf("cleanup stale running sync runs: %w", err)
+	}
+	if n > 0 {
+		if logger == nil {
+			logger = slog.Default()
+		}
+		logger.Warn("stale running sync runs marked failed", "count", n)
+	}
+	return nil
 }
 
 // BuildEngine 在一个已打开的 Store 上构造同步 Engine，供与读路径共享同一

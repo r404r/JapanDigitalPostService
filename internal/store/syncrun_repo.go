@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/r404r/JapanDigitalPostService/internal/domain"
 	"gorm.io/gorm"
@@ -57,4 +58,26 @@ func (r *syncRunRepo) CountRunning(ctx context.Context) (int64, error) {
 	err := r.db.WithContext(ctx).Model(&domain.SyncRun{}).
 		Where("status = ?", domain.StatusRunning).Count(&n).Error
 	return n, err
+}
+
+func (r *syncRunRepo) MarkRunningFailed(ctx context.Context, message string, finishedAt time.Time) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var runs []domain.SyncRun
+		if err := tx.Where("status = ?", domain.StatusRunning).Find(&runs).Error; err != nil {
+			return err
+		}
+		for i := range runs {
+			runs[i].Status = domain.StatusFailed
+			runs[i].FinishedAt = &finishedAt
+			runs[i].DurationMs = finishedAt.Sub(runs[i].StartedAt).Milliseconds()
+			runs[i].ErrorMessage = message
+			if err := tx.Save(&runs[i]).Error; err != nil {
+				return err
+			}
+			count++
+		}
+		return nil
+	})
+	return count, err
 }
