@@ -12,27 +12,102 @@
 
 ## 现状
 
-架构基线阶段：已建立工程骨架、文档、OpenAPI 契约。业务功能按 `docs/tasks/` 顺序实现。
+后端核心已落地并经测试覆盖：多数据库存储层（SQLite 已实现，PG/MySQL 接口就位）、`utf_ken_all` 解析、
+全量/差分同步引擎（幂等、调度、DB 锁）、地址查询读路径（超时/上限/截断状态）、token 认证与发行、可选载荷加密。
 
-## 快速开始（骨架）
+尚未接入（见 `docs/tasks/`）：同步状态 API 端点装配（task-0008）、React 前端（task-0009）、
+PG/MySQL 方言实现与多方言 CI 矩阵（task-0002）、查询端点的真实 Bearer 鉴权（当前为放行占位）。
+详见 [`docs/tasks/task-0010-e2e-hardening.md`](docs/tasks/task-0010-e2e-hardening.md) 的收口复核发现。
 
-前置：Go 1.22+。
+## 快速开始
+
+前置：Go 1.22+（OpenAPI 校验与前端需 Node 20+）。
+
+### 1. 编译与测试
 
 ```bash
-make build        # 编译 server / batch
-make test         # 运行测试（SQLite）
-make run          # 启动 server，默认 :8080
-curl localhost:8080/v1/health
+make build        # 编译 bin/server 与 bin/batch
+make test         # 运行全部 Go 测试（SQLite 内存/临时库）
+make ci           # 一键本地 CI：fmt + vet + build + test + 灵魂文件 + OpenAPI 校验
 ```
 
-本地多方言验证（PostgreSQL / MySQL）：
+`make ci` 等价于 `./scripts/ci.sh`，与 `.github/workflows/ci.yml` 行为对齐，建议提交前运行。
+
+### 2. 配置
+
+复制 `.env.example` 为 `.env` 并按需修改；所有阈值（超时/上限/重试/频率）均可配置，
+默认值即 `docs/spec.md` 所述。关键项：
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `HTTP_ADDR` | `:8080` | 监听地址 |
+| `DB_DRIVER` / `DB_DSN` | `sqlite` / `file:dev.db?...` | 数据库驱动与连接串（当前仅 sqlite 已实现） |
+| `SYNC_CRON` | `0 3 * * *` | 进程内同步频率；`SYNC_SCHEDULER_ENABLED=false` 关闭 |
+| `QUERY_TIMEOUT` / `FUZZY_LIMIT` / `MAX_TOTAL` | `2s` / `20` / `1000` | 查询超时 / 模糊上限 / 过多阈值 |
+| `ADMIN_BOOTSTRAP_TOKEN` | — | 引导 admin token（启动时按 hash 幂等注入） |
+| `PAYLOAD_ENCRYPTION` | `none` | `none`=仅 TLS（推荐）；`aes-gcm`=响应体 AES-256-GCM 封装 |
+
+完整说明见 `.env.example` 与 [`docs/architecture.md` §9](docs/architecture.md)。
+
+### 3. 同步邮编数据
+
+库为空时首次同步会下载官网全量 `utf_ken_all.zip`（约 12.4 万行），之后按月差分。
+用独立批处理入口手动触发（与 server 共用同一引擎与 DB 锁）：
+
+```bash
+go run ./cmd/batch --type auto    # auto = DB 空则 full，否则 diff
+go run ./cmd/batch --type full    # 强制全量重建
+go run ./cmd/batch --type diff    # 强制差分（回看窗口内的 add/del）
+```
+
+或启动 server 后由进程内 cron 按 `SYNC_CRON` 自动执行。每次运行写入 `sync_runs`（类型/状态/计数/耗时/错误）。
+
+> 本地试跑而不联网时，可设 `SEED_SAMPLE_DATA=true` 写入内置示例地址，启动即可查询。
+
+### 4. 启动服务与调用 API
+
+```bash
+# 用一个引导 admin token 启动 server
+ADMIN_BOOTSTRAP_TOKEN=jdps_local_admin_example_token make run   # 监听 :8080
+
+curl localhost:8080/v1/health
+# {"status":"ok","version":"..."}
+
+# 按邮编查询（一个邮编可对应多町域，返回 address_count）
+curl "localhost:8080/v1/addresses/1000001"
+
+# 模糊/条件查询（zipcode 前缀 / 都道府県 / 市区町村 / q 关键字；最多 20 条 + total_count）
+curl "localhost:8080/v1/addresses?prefecture=東京都&limit=20"
+
+# 发行一个 read token（admin scope，明文仅返回一次）
+curl -X POST localhost:8080/v1/tokens \
+  -H "Authorization: Bearer jdps_local_admin_example_token" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"frontend","scope":"read","ttl_seconds":86400}'
+
+curl localhost:8080/v1/tokens -H "Authorization: Bearer jdps_local_admin_example_token"        # 列表（脱敏）
+curl -X DELETE localhost:8080/v1/tokens/<id> -H "Authorization: Bearer jdps_local_admin_example_token"  # 吊销
+```
+
+> 注：`/v1/addresses*` 当前为放行占位鉴权，token 管理端点已是真实 admin 鉴权；
+> 查询端点 Bearer 校验与同步状态端点（`/v1/sync/*`）的装配见 task-0006 收口 / task-0008。
+
+### 5. 多方言验证（PostgreSQL / MySQL）
 
 ```bash
 docker compose -f deployments/docker-compose.yml up -d
 ```
 
-配置见 `.env.example` 与 [`docs/architecture.md` §9](docs/architecture.md)。
+> PG/MySQL 方言实现属 task-0002；接入后由 CI 矩阵跑 SQLite + PG + MySQL 一致性。
+
+## 测试与 CI
+
+- Go 单元/集成测试用 SQLite，无需外部依赖：`make test`。
+- 端到端链路（同步 fixture → 查询 → token 鉴权）：`internal/e2e/e2e_test.go`。
+- 可复用边界 fixture：`internal/sync/testdata/ken_all_edgecases.csv`。
+- OpenAPI 契约校验：`make openapi-lint`（`@redocly/cli`，需 Node）。
+- CI（`.github/workflows/ci.yml`）：Go fmt/vet/build/test + 灵魂文件一致 + OpenAPI 校验。
 
 ## 技术栈
 
-Go + chi + oapi-codegen（OpenAPI spec-first）· GORM（PostgreSQL / MySQL / SQLite）· robfig/cron · React (Vite) sample 前端。
+Go + `net/http`（标准库路由）· GORM（PostgreSQL / MySQL / SQLite）· robfig/cron · 可选 AES-256-GCM 载荷加密 · React (Vite) sample 前端（task-0009）。
