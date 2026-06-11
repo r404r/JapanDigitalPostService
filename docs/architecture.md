@@ -105,7 +105,7 @@
 | `token_hash` | token 的 SHA-256（**不存明文**） |
 | `prefix` | token 前 8 位明文（便于在 UI 识别，不可反推） |
 | `scope` | `read` / `admin` |
-| `created_at` / `last_used_at` / `revoked_at` | 生命周期 |
+| `created_at` / `expires_at` / `last_used_at` / `revoked_at` | 生命周期（`expires_at` 为空=永不过期） |
 
 ### 4.3 `sync_runs`（同步运行记录）
 | 列 | 说明 |
@@ -158,8 +158,10 @@
 
 ## 7. 认证与 Token 发行
 
-- 数据端点：`Authorization: Bearer <token>`，中间件校验 `token_hash` 并按 scope 放行。
-- Token 仅在创建时返回一次明文；DB 只存 hash。
+- 数据端点：`Authorization: Bearer <token>`，中间件校验 `token_hash`、未吊销、未过期，并按 scope 放行（admin 隐含 read）。
+- Token 仅在创建时返回一次明文；DB 只存 hash + prefix。可选 `expires_at`（发行时由 `ttl_seconds` 计算）。
+- 认证/授权错误统一为 `{status, message}`，401 不区分原因，绝不回显 token/hash/栈/配置。
+- 业务逻辑只依赖 `domain.TokenRepository`：当前默认实现为进程内 `auth.MemoryStore`，task-0002 的 GORM store 落地同一接口后替换，HTTP/service 层不变。
 - 管理端点（admin scope）：`POST /v1/tokens` 发行、`GET /v1/tokens` 列表（脱敏）、`DELETE /v1/tokens/{id}` 吊销。
 - **引导**：首个 admin token 通过环境变量 `ADMIN_BOOTSTRAP_TOKEN` 注入（或启动时生成并打印一次），用于发行后续 token。
 - 前端提供 token 发行页面（需 admin token）。
@@ -191,8 +193,10 @@
 | `SYNC_FULL_URL` | 官网全量 zip | 全量数据源 |
 | `QUERY_TIMEOUT` | `2s` | 查询超时 |
 | `FUZZY_LIMIT` / `MAX_TOTAL` | `20` / `1000` | 模糊上限 / 过多阈值 |
-| `ADMIN_BOOTSTRAP_TOKEN` | — | 引导 admin token |
-| `PAYLOAD_ENCRYPTION` | `none` | 应用层加密模式 |
+| `ADMIN_BOOTSTRAP_TOKEN` | — | 引导 admin token（启动时幂等注入） |
+| `PAYLOAD_ENCRYPTION` | `none` | 应用层加密模式 `none`/`aes-gcm` |
+| `PAYLOAD_ENC_KEY` | — | aes-gcm 模式的 base64(32B) 密钥，仅环境/KMS 注入 |
+| `PAYLOAD_ENC_KEY_ID` | — | 可选密钥标识，便于轮换 |
 
 ## 10. 部署与运维
 

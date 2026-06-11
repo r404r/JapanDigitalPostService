@@ -21,6 +21,14 @@ type Config struct {
 	DBDriver string // DB_DRIVER: postgres|mysql|sqlite
 	DBDSN    string // DB_DSN
 	SyncCron string // SYNC_CRON
+
+	// 认证（task-0006）。
+	AdminBootstrapToken string // ADMIN_BOOTSTRAP_TOKEN: 首个 admin token，引导用
+
+	// 传输安全 / 可选载荷加密（task-0006 设计，task-0007 深化）。
+	PayloadEncryption string // PAYLOAD_ENCRYPTION: none|aes-gcm
+	PayloadEncKey     string // PAYLOAD_ENC_KEY: base64(32B) 密钥，仅 aes-gcm 模式需要
+	PayloadEncKeyID   string // PAYLOAD_ENC_KEY_ID: 可选密钥标识，便于轮换
 }
 
 // Load 从环境变量读取配置，缺省时使用 architecture §9 的默认值。
@@ -33,6 +41,12 @@ func Load() Config {
 		DBDriver:     getEnv("DB_DRIVER", "sqlite"),
 		DBDSN:        getEnv("DB_DSN", "file:dev.db?cache=shared&_fk=1"),
 		SyncCron:     getEnv("SYNC_CRON", "0 3 * * *"),
+
+		AdminBootstrapToken: getEnv("ADMIN_BOOTSTRAP_TOKEN", ""),
+
+		PayloadEncryption: getEnv("PAYLOAD_ENCRYPTION", "none"),
+		PayloadEncKey:     getEnv("PAYLOAD_ENC_KEY", ""),
+		PayloadEncKeyID:   getEnv("PAYLOAD_ENC_KEY_ID", ""),
 	}
 }
 

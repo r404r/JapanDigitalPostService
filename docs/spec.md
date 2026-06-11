@@ -75,9 +75,11 @@
 - `POST /v1/sync/trigger`（admin）：手动触发，body `{ "type": "full" | "diff" }`，返回 run id。
 
 ### 3.5 Token 管理（admin scope）
-- `POST /v1/tokens` body `{ "name": "...", "scope": "read|admin" }` → `201`，**仅此一次**返回明文 `token`。
-- `GET /v1/tokens` → 列表（`id`、`name`、`prefix`、`scope`、时间戳；不含明文/hash）。
-- `DELETE /v1/tokens/{id}` → 吊销（设 `revoked_at`，立即失效）。
+- `POST /v1/tokens` body `{ "name": "...", "scope": "read|admin", "ttl_seconds": 86400 }` → `201`，**仅此一次**返回明文 `token`。`ttl_seconds` 可选（正整数）；省略则永不过期，置位则响应含 `expires_at`。
+- `GET /v1/tokens` → 列表（`id`、`name`、`prefix`、`scope`、`created_at`、`expires_at`、`last_used_at`、`revoked_at`；**不含明文/hash**）。
+- `DELETE /v1/tokens/{id}` → 吊销（设 `revoked_at`，立即失效）。未知 id 返回 `404 not_found`。
+
+明文 token 形如 `jdps_<43 字符 base64url>`（256-bit 随机熵）；落库只存 SHA-256 hash 与 8 字符 prefix。发行入参非法（缺 name、未知 scope、`ttl_seconds<=0`、未知字段、非法 JSON）返回 `400 invalid_request`。
 
 ## 4. 同步行为规格
 
@@ -92,16 +94,41 @@
 
 ## 5. 认证规格
 
-- 校验 `Authorization: Bearer <token>`：计算 SHA-256 比对 `token_hash`，检查未吊销，更新 `last_used_at`。
-- scope：`read` 可访问查询与 sync 状态；`admin` 额外可发行/吊销 token、手动触发同步。
-- 失败返回 `401 unauthorized`；scope 不足返回 `403 forbidden`。
-- 引导 admin token 来自 `ADMIN_BOOTSTRAP_TOKEN`。
+- 校验 `Authorization: Bearer <token>`（scheme 大小写不敏感）：计算 SHA-256 比对 `token_hash`，检查**未吊销且未过期**，更新 `last_used_at`（审计用，更新失败不阻断认证）。
+- scope：`read` 可访问查询与 sync 状态；`admin` 额外可发行/吊销 token、手动触发同步。admin 隐含 read。
+- 失败返回 `401 unauthorized`；scope 不足返回 `403 forbidden`。401 不区分"缺失/无效/过期/吊销"，避免成为枚举有效 token 的预言机。
+- 引导 admin token 来自 `ADMIN_BOOTSTRAP_TOKEN`（启动时按 hash 幂等注入，已存在则跳过）。
+- **安全错误约束**：所有认证/授权错误体仅含 `{status, message}` 机器码与安全文案，**绝不回显客户端提交的 token、绝不含 hash、内部栈或配置**。
+
+### 5.1 认证边界（sample 页面 / API 管理界面）
+| 资源 | 所需凭证 |
+|---|---|
+| `GET /v1/health` | 公开，无需 token |
+| 查询端点 `GET /v1/addresses*`、同步状态 `GET /v1/sync/*` | `read` 或 `admin` |
+| token 管理 `POST/GET/DELETE /v1/tokens`、手动同步 `POST /v1/sync/trigger` | 仅 `admin` |
+
+- React sample（task-0009）：查询页持 `read` token；同步触发页与 Token 页持 `admin` token。
+- 前端不得持久化明文 token；新发 token 仅在创建响应里一次性展示，由用户自行保存。
 
 ## 6. 传输加密规格
 
-- 默认：仅 TLS（部署层）。`PAYLOAD_ENCRYPTION=none`。
-- 可选：`PAYLOAD_ENCRYPTION=aes-gcm` 时，响应体经 AES-256-GCM 加密；nonce 随密文传输；密钥经环境/KMS 注入，不入库。
-- 决策依据与影响见 architecture §8。客户端需按约定解密；接口语义不变。
+- **基线（默认且推荐）**：仅 TLS 1.2+（部署层终止或服务内启用）。`PAYLOAD_ENCRYPTION=none` 时响应为明文 JSON，行为与未启用完全一致（零开销）。
+- **可选应用层加密**：`PAYLOAD_ENCRYPTION=aes-gcm` 时，整个 JSON 响应体经 **AES-256-GCM** 封装，响应头带 `X-Payload-Encryption: AES-256-GCM`，body 变为如下信封：
+
+```json
+{
+  "enc": "AES-256-GCM",
+  "kid": "<key id，用于轮换，可空>",
+  "nonce": "<base64(标准) 随机 nonce，每次响应唯一>",
+  "ciphertext": "<base64(标准) 密文，含 GCM 认证 tag>"
+}
+```
+
+- **客户端解密约定**：base64 解码 `nonce` 与 `ciphertext`，用约定密钥（按 `kid` 选取）做 AES-256-GCM `Open`，得到原始 JSON 再解析。认证失败即拒绝（数据被篡改）。
+- **密钥管理**：密钥从环境/KMS 注入（`PAYLOAD_ENC_KEY`，base64 的 32 字节；`PAYLOAD_ENC_KEY_ID` 标识），**绝不入库、不硬编码、不出现在日志/错误体**；轮换通过新增 key id 实现。
+- **错误处理**：加密失败返回安全的 `500 internal_error`，**绝不回退为明文**（否则静默削弱安全保证）。解密失败（nonce/密文非法、认证不通过）返回统一错误，不泄露具体原因。
+- **不适用场景 / 边界**：仅封装响应载荷，不改接口语义/字段；非 JSON 响应、空 body 原样透传；不替代 TLS（请求方向与传输层完整性仍由 TLS 保证）；不自研加密协议，仅用标准原语。邮编为公开数据，多数部署用 `none` 即可，应用层加密面向少数高安全/合规场景。
+- 决策依据与影响见 architecture §8。
 
 ## 7. 错误响应统一格式
 
@@ -134,3 +161,4 @@
 | 日期 | task | 变更 |
 |---|---|---|
 | 2026-06-11 | 架构基线 | 初始 spec v1 |
+| 2026-06-11 | task-0006 | §3.5 token 增加 `ttl_seconds`/`expires_at` 与发行校验；§5 认证补充过期校验、401 不区分、安全错误约束、§5.1 认证边界表；§6 传输加密细化信封/密钥/错误处理/不适用场景。实现：`internal/domain`(Token+Repository)、`internal/auth`(service/中间件/管理端点/内存仓储)、`internal/crypto`(AES-256-GCM + 响应中间件)。 |
