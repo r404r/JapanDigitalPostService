@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { ApiClient } from "./api/client";
 import type {
@@ -143,20 +143,46 @@ function SyncPanel({ api, hasToken }: { api: ApiClient; hasToken: boolean }) {
   const [error, setError] = useState<ApiError | null>(null);
   const [loading, setLoading] = useState(false);
   const [triggerType, setTriggerType] = useState<SyncType>("auto");
+  const loadGeneration = useRef(0);
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    const generation = ++loadGeneration.current;
     setLoading(true);
     setError(null);
     try {
       const [nextStatus, nextRuns] = await Promise.all([api.getSyncStatus(), api.listSyncRuns()]);
+      if (loadGeneration.current !== generation) {
+        return;
+      }
       setStatus(nextStatus);
       setRuns(nextRuns);
     } catch (caught) {
-      setError(caught as ApiError);
+      if (loadGeneration.current === generation) {
+        setError(caught as ApiError);
+      }
     } finally {
-      setLoading(false);
+      if (loadGeneration.current === generation) {
+        setLoading(false);
+      }
     }
-  };
+  }, [api]);
+
+  const reset = useCallback(() => {
+    loadGeneration.current += 1;
+    setStatus(null);
+    setRuns([]);
+    setTriggered(null);
+    setError(null);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (!hasToken) {
+      reset();
+      return;
+    }
+    void load();
+  }, [hasToken, load, reset]);
 
   const trigger = async () => {
     setLoading(true);

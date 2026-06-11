@@ -170,20 +170,111 @@ describe("App", () => {
             error_message: null
           }
         ])
-      );
+    );
 
     render(<App />);
     await userEvent.click(screen.getByRole("button", { name: "管理" }));
-    await userEvent.click(screen.getByRole("button", { name: "再読込" }));
 
     expect(await screen.findByText("total_addresses")).toBeInTheDocument();
     expect(screen.getAllByText("full").length).toBeGreaterThan(0);
     expect(screen.getByText("success")).toBeInTheDocument();
   });
 
+  it("loads persisted sync run history when the admin page opens", async () => {
+    sessionStorage.setItem("apiToken", "admin-token");
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          total_addresses: 42,
+          running: false,
+          last_success_at: "2026-06-11T00:00:00Z",
+          last_type: "diff"
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            id: "persisted-run",
+            type: "diff",
+            status: "success",
+            trigger: "schedule",
+            rows_added: 1,
+            rows_updated: 2,
+            rows_deleted: 3,
+            rows_total: 6,
+            started_at: "2026-06-11T00:00:00Z",
+            finished_at: "2026-06-11T00:00:01Z",
+            error_message: null
+          }
+        ])
+      );
+
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "管理" }));
+
+    expect(await screen.findByText("total_addresses")).toBeInTheDocument();
+    expect(screen.getAllByText("diff").length).toBeGreaterThan(0);
+    expect(screen.getByText("success")).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(
+      "/v1/sync/runs?limit=100&offset=0",
+      expect.objectContaining({
+        headers: expect.any(Headers)
+      })
+    );
+  });
+
+  it("clears sync status and run history when the bearer token is removed", async () => {
+    sessionStorage.setItem("apiToken", "admin-token");
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          total_addresses: 42,
+          running: false,
+          last_success_at: "2026-06-11T00:00:00Z",
+          last_type: "diff"
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            id: "persisted-run",
+            type: "diff",
+            status: "success",
+            trigger: "schedule",
+            rows_added: 1,
+            rows_updated: 2,
+            rows_deleted: 3,
+            rows_total: 6,
+            started_at: "2026-06-11T00:00:00Z",
+            finished_at: "2026-06-11T00:00:01Z",
+            error_message: null
+          }
+        ])
+      );
+
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "管理" }));
+    expect(await screen.findByText("success")).toBeInTheDocument();
+
+    await userEvent.clear(screen.getByLabelText("Bearer token"));
+
+    expect(screen.queryByText("total_addresses")).not.toBeInTheDocument();
+    expect(screen.queryByText("success")).not.toBeInTheDocument();
+    expect(screen.getByText("同期履歴はまだありません。")).toBeInTheDocument();
+  });
+
   it("triggers auto sync and refreshes running state", async () => {
     sessionStorage.setItem("apiToken", "admin-token");
     vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          total_addresses: 0,
+          running: false,
+          last_success_at: null,
+          last_type: null
+        })
+      )
+      .mockResolvedValueOnce(jsonResponse([]))
       .mockResolvedValueOnce(
         jsonResponse({
           id: "run-auto",
@@ -227,6 +318,7 @@ describe("App", () => {
 
     render(<App />);
     await userEvent.click(screen.getByRole("button", { name: "管理" }));
+    expect(await screen.findByText("total_addresses")).toBeInTheDocument();
     await userEvent.selectOptions(screen.getByLabelText("同期方式"), "auto");
     await userEvent.click(screen.getByRole("button", { name: "同期実行" }));
 
@@ -244,6 +336,15 @@ describe("App", () => {
   it("creates a token and hides one-time plaintext", async () => {
     sessionStorage.setItem("apiToken", "admin-token");
     vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          total_addresses: 0,
+          running: false,
+          last_success_at: null,
+          last_type: null
+        })
+      )
+      .mockResolvedValueOnce(jsonResponse([]))
       .mockResolvedValueOnce(
         jsonResponse(
           {
@@ -275,6 +376,7 @@ describe("App", () => {
 
     render(<App />);
     await userEvent.click(screen.getByRole("button", { name: "管理" }));
+    expect(await screen.findByText("total_addresses")).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText("名前"), "sample");
     await userEvent.click(screen.getByRole("button", { name: "発行" }));
 

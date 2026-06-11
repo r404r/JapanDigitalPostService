@@ -94,7 +94,7 @@ export class ApiClient {
   }
 
   listSyncRuns() {
-    return this.request<SyncRun[]>("/sync/runs?limit=20&offset=0");
+    return this.request<SyncRun[]>("/sync/runs?limit=100&offset=0");
   }
 
   triggerSync(type: SyncType) {

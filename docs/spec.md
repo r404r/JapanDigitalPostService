@@ -164,7 +164,7 @@
 
 三个页面（最小可用）：
 1. **查询页**：输入邮编/都道府県/市区町村/关键字，展示结果表、OpenAPI 字段 `total_count` / `returned_count` / `items`，并可展示 `items.length` 作为本次返回地址数量；同时展示 `truncated`/`too_many_results`/`timeout` 状态提示。
-2. **同步状态页**：展示 `total_addresses`、最近成功同步时间/类型、是否运行中、运行历史（类型、状态、时间、`rows_total` 处理数量、错误摘要），可手动触发 full/diff（admin）。
+2. **同步状态页**：持有 Bearer token 时自动读取同步状态与运行历史；展示 `total_addresses`、最近成功同步时间/类型、是否运行中、最新 100 件运行历史（类型、状态、时间、`rows_total` 处理数量、错误摘要），可手动触发 full/diff（admin）。清空 token 时同步状态与历史显示应一并清空，避免保留旧 token 读取到的信息。
 3. **Token 页**：发行 token（明文仅展示一次并提示保存）、脱敏列表、吊销（需 admin）。
 
 通用行为：
@@ -213,3 +213,4 @@
 | 2026-06-11 | GHO-36 (装配收口) | 挂载 `/v1/sync/{status,runs,trigger}`（§3.4），并为查询/同步端点接入真实 Bearer 鉴权（§3.2/§5.1）：移除 `internal/server` 占位放行中间件，经 `server.Options` 注入 `Authorizer`/`TokenHandlers`/`SyncTrigger`，由 `cmd/server` 传入 `auth.Service`/engine——查询与 sync 状态需 `read`\|`admin`，trigger 与 token 管理仅 `admin`。trigger 经新增 `Engine.TriggerAsync` 异步执行（立即 202 返回 `running` run id，已有同步在跑返回 `sync_running`/409）。全部 /v1 路由统一在 `server.NewRouter` 装配，`cmd/server` 与 `internal/e2e` 共用同一入口；e2e 改为覆盖鉴权边界（无 token 401→read 查询→read 触发 403→admin 触发→status/runs 可见），并补 sync handler 单测。无 openapi 契约变更。 |
 | 2026-06-11 | GHO-37 (后端契约扩展) | `POST /v1/sync/trigger` 入参类型由 `full\|diff` 扩展为 `auto\|full\|diff`（§3.4）：openapi 请求体 enum 增加 `auto` 并补充各类型语义说明；handler 放行 `auto`（引擎 `resolveType` 已支持，库空→full、否则 diff），落库的 `SyncRun.type` 仍仅 full/diff。补 sync handler 单测覆盖 auto 触发返回解析后的真实类型。无新增依赖。 |
 | 2026-06-11 | GHO-38 (全功能手工测试容器) | §8/§10 增加 `STATIC_DIR` 生产前端托管；新增 `deployments/manual-test.Dockerfile`、`deployments/manual-test.compose.yml`、`deployments/manual-test.env`，一条 compose 命令启动后端+画面+内置 PG/MySQL，数据库通过 env 文件在 sqlite/postgres/mysql 间切换。 |
+| 2026-06-11 | task-0011 | React sample 管理页持有 token 时自动读取 `sync/status` 与最新 100 件 `sync/runs`，刷新/重新进入后从后端持久化 `sync_runs` 恢复同期履歴；清空 token 时清空同步状态与历史显示。无 OpenAPI 变更。 |
