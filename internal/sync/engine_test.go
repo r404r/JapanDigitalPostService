@@ -391,3 +391,41 @@ func TestEngineShutdownCancelsTriggerAsyncAndMarksRunFailed(t *testing.T) {
 		t.Fatalf("running = %d, want 0", running)
 	}
 }
+
+func TestSchedulerStopCancelsRunningSync(t *testing.T) {
+	st := openTestStore(t)
+	fetcher := &blockingFetcher{started: make(chan struct{})}
+	e := NewEngine(st.Addresses(), st.SyncRuns(), st.Locker(), fetcher, Options{
+		FullURL:   "full",
+		BatchSize: 2,
+	}, nil)
+
+	sch, err := NewScheduler(e, "@every 1s", nil)
+	if err != nil {
+		t.Fatalf("NewScheduler: %v", err)
+	}
+	sch.Start()
+	select {
+	case <-fetcher.started:
+	case <-time.After(1500 * time.Millisecond):
+		t.Fatal("scheduled sync did not start")
+	}
+
+	stopCtx := sch.Stop()
+	select {
+	case <-stopCtx.Done():
+	case <-time.After(time.Second):
+		t.Fatal("scheduler stop did not finish")
+	}
+
+	latest, err := st.SyncRuns().Latest(context.Background())
+	if err != nil {
+		t.Fatalf("Latest: %v", err)
+	}
+	if latest == nil || latest.Status != domain.StatusFailed {
+		t.Fatalf("latest = %+v, want failed run", latest)
+	}
+	if !strings.Contains(latest.ErrorMessage, "context canceled") {
+		t.Fatalf("error = %q, want context canceled", latest.ErrorMessage)
+	}
+}

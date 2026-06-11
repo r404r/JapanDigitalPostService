@@ -145,6 +145,7 @@
 - **流式处理**：CSV 流式解析 + 分批写入（默认 1000 行/批），避免大文件全量入内存。
 - **可观测**：每次运行写 `sync_runs`，详细计数 + 错误；失败不影响在线查询（读路径与写路径解耦）。
 - **优雅关闭**：手动触发的异步同步由 Engine 跟踪；server shutdown 时取消并等待后台任务退出，取消中的运行记录会收敛为 `failed`。
+- **调度停止**：进程内 cron scheduler 持有可取消 root context；server shutdown 时会取消当前调度同步并等待 job 退出。
 - **崩溃恢复**：server/batch 启动时会把上个进程遗留的 `running` 记录标记为 `failed`，避免状态 API 与管理画面长期显示运行中。
 - **锁释放**：`sync_locks` release 使用独立短超时 context（`SYNC_LOCK_RELEASE_TIMEOUT`），避免 DB 异常时同步 goroutine 永久卡在释放锁阶段。
 

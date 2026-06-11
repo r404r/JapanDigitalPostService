@@ -49,3 +49,4 @@ Squad leader 按依赖逐个分派；backlog 任务不要一次性全部并行�
 | [0020](task-0020-http-server-timeouts.md) | HTTP server timeout 配置。 |
 | [0021](task-0021-seed-sample-parameterized-sql.md) | SeedSampleIfEmpty 参数化 SQL。 |
 | [0022](task-0022-sync-lock-release-timeout.md) | 同步锁释放超时。 |
+| [0023](task-0023-scheduler-cancel-context.md) | cron scheduler 可取消 context。 |

@@ -100,7 +100,7 @@
 
 ## 4. 同步行为规格（task-0004 已实现）
 
-1. 调度：`cmd/server` 进程内 `robfig/cron` 按 `SYNC_CRON`（默认 `0 3 * * *`，每天 03:00）触发 `auto` 同步；可由 `SYNC_SCHEDULER_ENABLED=false` 关闭。`cmd/batch --type auto|full|diff` 为独立入口，供外部调度器（K8s CronJob / 系统 cron）触发，与 server 共用同一引擎与 DB 锁。
+1. 调度：`cmd/server` 进程内 `robfig/cron` 按 `SYNC_CRON`（默认 `0 3 * * *`，每天 03:00）触发 `auto` 同步；可由 `SYNC_SCHEDULER_ENABLED=false` 关闭。server shutdown 时会取消在跑的调度同步并等待 job 退出。`cmd/batch --type auto|full|diff` 为独立入口，供外部调度器（K8s CronJob / 系统 cron）触发，与 server 共用同一引擎与 DB 锁。
 2. 判定：`auto` 时 `addresses` 为空 → full；否则 → diff。手动可强制 `full`/`diff`。
 3. full：下载 zip → 校验大小 → 解压 → **流式**逐行解析（不全量入内存）→ 分批 upsert（默认 1000/批，`ON CONFLICT(zipcode,jis_code,town,town_kana)`）→ 可选剪除官方文件中已消失的地址（`SYNC_FULL_PRUNE`，行数低于 `SYNC_FULL_MIN_ROWS` 时跳过剪枝以防截断文件误删）→ 写 `sync_runs(type=full)`。
 4. diff：对**回看窗口** `SYNC_DIFF_LOOKBACK_MONTHS`（默认 3，含当月）内每个月份，下载 `utf_add_<YYMM>` / `utf_del_<YYMM>`，按时间升序应用——**先按废止文件 delete，再按新增文件 upsert**（保证"改名"=旧记录在 del + 新记录在 add 时最终留下新记录）。404 视为该月无差分并跳过。`diff_period` 记录最新已应用月份。
@@ -230,3 +230,4 @@
 | 2026-06-11 | task-0019 | 修复 Claude Review #1/#2：新增 DB 连接池限额配置，并在 `store.Open` 对 GORM/raw SQL 共享的底层 `database/sql` 池统一设置 max open/idle/lifetime。无 OpenAPI 变更。 |
 | 2026-06-11 | task-0020 | 修复 Claude Review #3：HTTP server 新增 read-header/read/write/idle timeout 配置并在 `http.Server` 上生效，降低慢连接长期占用风险。无 OpenAPI 变更。 |
 | 2026-06-11 | task-0022 | 修复 Claude Review #7：`sync_locks` release 改用 `SYNC_LOCK_RELEASE_TIMEOUT` 控制的短超时 context，避免 DB 异常时同步 goroutine 无限阻塞。无 OpenAPI 变更。 |
+| 2026-06-11 | task-0023 | 修复 Claude Review #8：cron scheduler 持有可取消 root context，`Stop()` 会取消在跑调度同步并等待 job 退出。无 OpenAPI 变更。 |
