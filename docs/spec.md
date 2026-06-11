@@ -77,7 +77,7 @@
 - 超时由 `QUERY_TIMEOUT`（默认 2s）控制：handler 建立 `context.WithTimeout` 并透传至 service → repository → DB 驱动；到时驱动中止查询、归还连接，返回 `timeout`，**不返回部分脏数据**。
 - 每个响应回写 `X-Request-Id`（沿用客户端传入或服务端生成），错误体附带同值 `trace_id`，便于端到端排查。
 
-> 认证现状：本端点的 Bearer 校验由 task-0006 接入，当前为放行的占位中间件，故 `401 unauthorized` 暂未实际触发（契约已就位）。
+> 认证现状：本端点已接入真实 Bearer 校验（`read` 或 `admin` scope，见 §5.1）。占位放行中间件已移除，无 token / token 无效即返回 `401 unauthorized`，scope 不足返回 `403 forbidden`。
 
 ### 3.3 `GET /v1/addresses/{zipcode}` — 按邮编精确查询
 - 路径 `zipcode` 必须为 7 位数字（否则 `invalid_request`/400）。
@@ -88,7 +88,7 @@
 - `GET /v1/sync/runs?limit=&offset=`：历史运行记录（`sync_runs`），含类型、状态、计数、耗时、错误。
 - `POST /v1/sync/trigger`（admin）：手动触发，body `{ "type": "full" | "diff" }`，返回 run id。
 
-> 实现现状：以上三端点的契约已在 `openapi.yaml` 就位，但尚未挂载到 `cmd/server`（属 task-0008-sync-status-api 范围）。同步本身已可用：进程内 cron（`SYNC_CRON`）与独立入口 `cmd/batch --type auto|full|diff` 均经引擎执行并写 `sync_runs`。手动触发/状态查看的 HTTP 端点待 task-0008 装配。
+> 实现现状：以上三端点已挂载到 `cmd/server`（经 `internal/server.NewRouter` 统一装配）。`GET /v1/sync/status`（`total_addresses`/`running`/`last_success_at`/`last_type`）与 `GET /v1/sync/runs` 需 `read`|`admin`；`POST /v1/sync/trigger` 仅 `admin`，**异步执行**（全量可达分钟级，不占住请求）并立即以 `202` 返回创建的 `running` 运行记录，已有同步在跑时返回 `sync_running`/409。进程内 cron（`SYNC_CRON`）与独立入口 `cmd/batch --type auto|full|diff` 仍可用，与触发端点共用同一引擎与 DB 锁。
 
 ### 3.5 Token 管理（admin scope）
 - `POST /v1/tokens` body `{ "name": "...", "scope": "read|admin", "ttl_seconds": 86400 }` → `201`，**仅此一次**返回明文 `token`。`ttl_seconds` 可选（正整数）；省略则永不过期，置位则响应含 `expires_at`。
@@ -208,3 +208,4 @@
 | 2026-06-11 | GHO-34 (task-0002 多数据库移植) | 把 task-0002 的多方言存储能力整合进当前 main：`store.Open` 接入 PG/MySQL 驱动（保留连接超时/退避重试），Token 改用 GORM 持久化（替换内存 store，重启不丢）；新增 `domain.ErrConflict`（唯一冲突归一，§5/§7 引导 token 幂等收口）；`migrations/` 补三方言 `0001_init.*.sql`（4 列唯一键、`tokens.expires_at`、`sync_locks`）；新增 PG/MySQL 集成测试（`TEST_*_DSN`，§9）与 CI service 容器 job。方言适配：`town_kana` 收紧至 256 以满足 MySQL InnoDB 索引前缀上限；锁行 `acquired_at` 用纪元哨兵避免 MySQL 严格模式拒绝零值。 |
 | 2026-06-11 | task-0007 | 实现 React sample 查询、同步状态/历史、token 发行/管理页面与前端验证范围 |
 | 2026-06-11 | task-0010 (端到端收尾) | 收口复核 spec/openapi↔实现：§3.4 标注同步状态端点契约就位但待 task-0008 装配。新增端到端测试（同步 fixture→查询→token 鉴权）、可复用边界 fixture、一键脚本 `scripts/ci.sh`、CI OpenAPI 校验 job；openapi 为 `/sync/status`、`/sync/runs` 补 401。无行为变更。 |
+| 2026-06-11 | GHO-36 (装配收口) | 挂载 `/v1/sync/{status,runs,trigger}`（§3.4），并为查询/同步端点接入真实 Bearer 鉴权（§3.2/§5.1）：移除 `internal/server` 占位放行中间件，经 `server.Options` 注入 `Authorizer`/`TokenHandlers`/`SyncTrigger`，由 `cmd/server` 传入 `auth.Service`/engine——查询与 sync 状态需 `read`\|`admin`，trigger 与 token 管理仅 `admin`。trigger 经新增 `Engine.TriggerAsync` 异步执行（立即 202 返回 `running` run id，已有同步在跑返回 `sync_running`/409）。全部 /v1 路由统一在 `server.NewRouter` 装配，`cmd/server` 与 `internal/e2e` 共用同一入口；e2e 改为覆盖鉴权边界（无 token 401→read 查询→read 触发 403→admin 触发→status/runs 可见），并补 sync handler 单测。无 openapi 契约变更。 |

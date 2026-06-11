@@ -73,6 +73,9 @@ func toSearchDTO(res *query.Result) searchResponseDTO {
 
 type handlers struct {
 	svc          *query.Service
+	reader       domain.AddressReader     // 同步状态的地址计数（CountAll）
+	runs         domain.SyncRunRepository // 同步状态/历史
+	trigger      SyncTrigger              // 手动触发（异步）
 	queryTimeout time.Duration
 	logger       *slog.Logger
 }

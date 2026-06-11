@@ -63,8 +63,9 @@ func NewEngine(addresses domain.AddressRepository, runs domain.SyncRunRepository
 	}
 }
 
-// Run 执行一次同步。reqType 为 auto/full/diff；trigger 区分调度/手动。并发触发
-// 返回 domain.ErrSyncRunning。返回写入的 SyncRun（含计数与状态）。
+// Run 执行一次同步（同步阻塞至完成）。reqType 为 auto/full/diff；trigger 区分
+// 调度/手动。并发触发返回 domain.ErrSyncRunning。返回写入的 SyncRun（含计数与
+// 状态）。供 cmd/batch 与进程内调度等可阻塞等待的调用方使用。
 func (e *Engine) Run(ctx context.Context, reqType domain.SyncType, trigger domain.SyncTrigger) (*domain.SyncRun, error) {
 	holder := e.holder()
 	release, ok, err := e.locker.Acquire(ctx, holder)
@@ -80,12 +81,67 @@ func (e *Engine) Run(ctx context.Context, reqType domain.SyncType, trigger domai
 		}
 	}()
 
-	// 判定同步类型。
+	syncType, err := e.resolveType(ctx, reqType)
+	if err != nil {
+		return nil, err
+	}
+	run, start, err := e.beginRun(ctx, syncType, trigger)
+	if err != nil {
+		return nil, err
+	}
+	return run, e.execute(ctx, run, syncType, start)
+}
+
+// TriggerAsync 异步触发一次同步：同步地获取锁、判定类型并创建 sync_run 记录，
+// 然后在后台 goroutine 中执行下载/解析/应用并落库——立即返回创建的运行记录
+// （status=running），供 HTTP 触发端点在不占住请求（全量可达分钟级）的前提下
+// 回传 run id。已有同步在运行时返回 domain.ErrSyncRunning（映射到 409）。
+//
+// 后台执行使用独立的 context.Background()，不受触发请求生命周期影响；锁在后台
+// 执行结束后释放。返回值是创建时刻的快照，与后台 goroutine 各持一份，避免并发读写。
+func (e *Engine) TriggerAsync(reqType domain.SyncType, trigger domain.SyncTrigger) (*domain.SyncRun, error) {
+	ctx := context.Background()
+	holder := e.holder()
+	release, ok, err := e.locker.Acquire(ctx, holder)
+	if err != nil {
+		return nil, fmt.Errorf("acquire sync lock: %w", err)
+	}
+	if !ok {
+		return nil, domain.ErrSyncRunning
+	}
+
+	releaseOnce := func() {
+		if rerr := release(); rerr != nil {
+			e.logger.Error("release sync lock", "err", rerr)
+		}
+	}
+
+	syncType, err := e.resolveType(ctx, reqType)
+	if err != nil {
+		releaseOnce()
+		return nil, err
+	}
+	run, start, err := e.beginRun(ctx, syncType, trigger)
+	if err != nil {
+		releaseOnce()
+		return nil, err
+	}
+
+	snapshot := *run // 创建时刻快照，返回给调用方；后台 goroutine 持原指针，二者互不共享。
+	go func() {
+		defer releaseOnce()
+		_ = e.execute(context.Background(), run, syncType, start)
+	}()
+	return &snapshot, nil
+}
+
+// resolveType 把 auto/空 判定为 full（库空）或 diff（库非空）；显式 full/diff 原样返回。
+func (e *Engine) resolveType(ctx context.Context, reqType domain.SyncType) (domain.SyncType, error) {
 	syncType := reqType
 	if syncType == domain.SyncAuto || syncType == "" {
 		count, cerr := e.addresses.Count(ctx)
 		if cerr != nil {
-			return nil, fmt.Errorf("count addresses: %w", cerr)
+			return "", fmt.Errorf("count addresses: %w", cerr)
 		}
 		if count == 0 {
 			syncType = domain.SyncFull
@@ -93,7 +149,11 @@ func (e *Engine) Run(ctx context.Context, reqType domain.SyncType, trigger domai
 			syncType = domain.SyncDiff
 		}
 	}
+	return syncType, nil
+}
 
+// beginRun 创建一条 status=running 的运行记录并返回（含起始时刻）。调用方须已持锁。
+func (e *Engine) beginRun(ctx context.Context, syncType domain.SyncType, trigger domain.SyncTrigger) (*domain.SyncRun, time.Time, error) {
 	start := e.now()
 	run := &domain.SyncRun{
 		ID:        e.newID(),
@@ -103,11 +163,18 @@ func (e *Engine) Run(ctx context.Context, reqType domain.SyncType, trigger domai
 		StartedAt: start,
 	}
 	if err := e.runs.Create(ctx, run); err != nil {
-		return nil, fmt.Errorf("create sync run: %w", err)
+		return nil, start, fmt.Errorf("create sync run: %w", err)
 	}
-	e.logger.Info("sync started", "run_id", run.ID, "type", syncType, "trigger", trigger)
+	return run, start, nil
+}
+
+// execute 执行同步主体（下载/解析/应用）并把最终状态与计数落库。调用方须已持锁，
+// 并在完成后释放锁。
+func (e *Engine) execute(ctx context.Context, run *domain.SyncRun, syncType domain.SyncType, start time.Time) error {
+	e.logger.Info("sync started", "run_id", run.ID, "type", syncType, "trigger", run.Trigger)
 
 	var res ApplyResult
+	var err error
 	switch syncType {
 	case domain.SyncFull:
 		res, err = e.runFull(ctx, run)
@@ -139,7 +206,7 @@ func (e *Engine) Run(ctx context.Context, reqType domain.SyncType, trigger domai
 			err = uerr
 		}
 	}
-	return run, err
+	return err
 }
 
 func (e *Engine) runFull(ctx context.Context, run *domain.SyncRun) (ApplyResult, error) {

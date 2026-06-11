@@ -45,17 +45,6 @@ func newRequestID() string {
 	return hex.EncodeToString(b[:])
 }
 
-// authPlaceholder 是 task-0005 期间的占位认证中间件。
-//
-// 真正的 Bearer token 校验（hash 比对 / scope / last_used）由 task-0006 接入，
-// 届时替换本中间件即可，handler 与 service 无需改动。当前实现对所有请求放行，
-// 不读取也不校验 Authorization 头。
-func authPlaceholder(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		next.ServeHTTP(w, r)
-	})
-}
-
 // chain 按从外到内的顺序套用中间件（mws[0] 最外层）。
 func chain(h http.Handler, mws ...func(http.Handler) http.Handler) http.Handler {
 	for i := len(mws) - 1; i >= 0; i-- {

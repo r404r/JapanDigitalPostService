@@ -278,3 +278,60 @@ func TestEngineConcurrentTriggerRejected(t *testing.T) {
 		t.Fatalf("want ErrSyncRunning, got %v", err)
 	}
 }
+
+func TestEngineTriggerAsync(t *testing.T) {
+	st := openTestStore(t)
+	full := strings.Join([]string{rowA, rowB, rowC}, "\n") + "\n"
+	e := newTestEngine(t, st, map[string]string{"full": full})
+
+	// 立即返回 running 的运行记录（后台异步执行）。
+	run, err := e.TriggerAsync(domain.SyncFull, domain.TriggerManual)
+	if err != nil {
+		t.Fatalf("TriggerAsync: %v", err)
+	}
+	if run.ID == "" || run.Status != domain.StatusRunning || run.Type != domain.SyncFull {
+		t.Fatalf("returned run = %+v, want running/full with id", run)
+	}
+
+	// 轮询直到后台执行完成并落库为 success。
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		latest, lerr := st.SyncRuns().Latest(context.Background())
+		if lerr != nil {
+			t.Fatalf("latest: %v", lerr)
+		}
+		if latest != nil && latest.Status == domain.StatusSuccess {
+			if latest.ID != run.ID || latest.RowsAdded != 3 {
+				t.Fatalf("final run id=%s added=%d, want %s/3", latest.ID, latest.RowsAdded, run.ID)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("async sync did not complete; latest=%+v", latest)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := count(t, st); got != 3 {
+		t.Fatalf("addresses = %d, want 3", got)
+	}
+
+	// 完成后锁已释放：可再次触发（同步 Run 不应被 ErrSyncRunning 拒绝）。
+	if _, err := e.Run(context.Background(), domain.SyncFull, domain.TriggerManual); err != nil {
+		t.Fatalf("post-async run should succeed (lock released): %v", err)
+	}
+}
+
+func TestEngineTriggerAsyncConcurrentRejected(t *testing.T) {
+	st := openTestStore(t)
+	e := newTestEngine(t, st, map[string]string{"full": rowA + "\n"})
+
+	release, ok, err := st.Locker().Acquire(context.Background(), "holder-x")
+	if err != nil || !ok {
+		t.Fatalf("acquire: ok=%v err=%v", ok, err)
+	}
+	defer release()
+
+	if _, err := e.TriggerAsync(domain.SyncFull, domain.TriggerManual); !errors.Is(err, domain.ErrSyncRunning) {
+		t.Fatalf("want ErrSyncRunning, got %v", err)
+	}
+}

@@ -1,12 +1,12 @@
 // Command server 启动 JapanDigitalPostService 的 HTTP API。
 //
-// 当前已装配：GET /v1/health（无需认证）、地址查询读路径（task-0005）、
-// token 管理端点（admin scope，task-0006）、可选的应用层载荷加密中间件、
-// 可选的进程内同步调度（task-0004），以及优雅关闭。读路径与同步引擎共享
-// 同一 Store / 连接池；同步状态路由由 task-0008 接入。
+// 已装配：GET /v1/health（公开）、地址查询读路径（read 鉴权）、同步状态/历史
+// （read 鉴权）与手动触发（admin 鉴权，异步执行）、token 管理端点（admin 鉴权）、
+// 可选的应用层载荷加密中间件、可选的进程内同步调度，以及优雅关闭。读路径、同步
+// 引擎与触发端点共享同一 Store / 连接池。
 //
-// 注：查询端点的 Bearer 校验仍为 internal/server 的占位中间件（放行），
-// 与 token 管理端点的真实鉴权在后续装配 task 收口（见 spec §5.1）。
+// 全部 /v1 路由经 internal/server.NewRouter 统一装配（与 internal/e2e 一致），
+// 查询/同步端点已接入真实 Bearer 鉴权（spec §5.1），不再有占位放行中间件。
 package main
 
 import (
@@ -23,7 +23,6 @@ import (
 	"github.com/r404r/JapanDigitalPostService/internal/auth"
 	"github.com/r404r/JapanDigitalPostService/internal/config"
 	"github.com/r404r/JapanDigitalPostService/internal/crypto"
-	"github.com/r404r/JapanDigitalPostService/internal/domain"
 	"github.com/r404r/JapanDigitalPostService/internal/query"
 	"github.com/r404r/JapanDigitalPostService/internal/server"
 	"github.com/r404r/JapanDigitalPostService/internal/store"
@@ -68,9 +67,12 @@ func main() {
 		}
 	}
 
+	// 同步引擎：手动触发端点（POST /v1/sync/trigger）与进程内调度共用同一引擎，
+	// 与读路径共享同一 Store / 连接池。无论调度是否开启都需构造，供触发端点使用。
+	engine := app.BuildEngine(st, cfg, logger)
+
 	// 可选的进程内同步调度：开启时按 SYNC_CRON 周期触发 auto 同步。
 	if cfg.SyncSchedulerOn {
-		engine := app.BuildEngine(st, cfg, logger)
 		if sch, err := syncpkg.NewScheduler(engine, cfg.SyncCron, logger); err != nil {
 			logger.Error("sync scheduler disabled: bad SYNC_CRON", "spec", cfg.SyncCron, "err", err)
 		} else {
@@ -97,27 +99,24 @@ func main() {
 	}
 	tokenHandlers := auth.NewHandlers(authSvc)
 
-	// 查询读路径（health + /v1/addresses*，含 request-id 与占位认证中间件）。
+	// 统一装配全部 /v1 路由：health（公开）+ 查询（read）+ 同步状态/历史（read）+
+	// 手动触发（admin）+ token 管理（admin）。鉴权与 token 处理器经 Options 注入，
+	// 保持 server 包与 auth 包解耦；与 internal/e2e 共用同一装配入口。
 	reader := store.NewAddressReadRepo(sqlDB)
 	svc := query.NewService(reader, cfg.FuzzyLimit, cfg.MaxTotal)
 	router := server.NewRouter(server.Options{
-		QueryService: svc,
-		QueryTimeout: cfg.QueryTimeout,
-		Logger:       logger,
+		QueryService:  svc,
+		QueryTimeout:  cfg.QueryTimeout,
+		Logger:        logger,
+		AddressReader: reader,
+		SyncRuns:      st.SyncRuns(),
+		SyncTrigger:   engine,
+		Auth:          authSvc,
+		TokenHandlers: tokenHandlers,
 	})
 
-	mux := http.NewServeMux()
-	mux.Handle("GET /v1/health", router)
-	mux.Handle("GET /v1/addresses", router)
-	mux.Handle("GET /v1/addresses/{zipcode}", router)
-
-	// Token 管理端点：均要求 admin scope。
-	mux.Handle("POST /v1/tokens", authSvc.RequireScope(domain.ScopeAdmin, http.HandlerFunc(tokenHandlers.CreateToken)))
-	mux.Handle("GET /v1/tokens", authSvc.RequireScope(domain.ScopeAdmin, http.HandlerFunc(tokenHandlers.ListTokens)))
-	mux.Handle("DELETE /v1/tokens/{id}", authSvc.RequireScope(domain.ScopeAdmin, http.HandlerFunc(tokenHandlers.RevokeToken)))
-
 	// 可选载荷加密对所有路由生效（none 时为零开销直通）。
-	handler := cipher.Middleware(mux)
+	handler := cipher.Middleware(router)
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,

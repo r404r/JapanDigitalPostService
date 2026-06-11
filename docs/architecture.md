@@ -244,11 +244,11 @@
 
 - **可复用测试**：核心逻辑（parser / applier / engine / query / auth / crypto / store）均有单元与集成测试，跑 SQLite，无外部依赖。端到端链路（同步 fixture → 查询 → token 鉴权）见 `internal/e2e`；边界 fixture 见 `internal/sync/testdata`。
 - **CI / 一键脚本**：`.github/workflows/ci.yml`（Go fmt/vet/build/test + 灵魂文件一致 + OpenAPI 校验）；本地 `make ci` / `scripts/ci.sh` 等价复现。
-- **已知实现缺口**（spec/openapi 已标注，分别归属后续 task，非本任务范围）：
-  1. 同步状态 HTTP 端点 `/v1/sync/*` 契约就位但未装配 → task-0008。
-  2. 查询端点 `/v1/addresses*` 鉴权为放行占位（token 管理端点已真实鉴权）→ 装配收口。
-  3. `TokenRepository` 为进程内 `MemoryStore`，重启丢失 → task-0002 GORM store 替换。
-  4. PG/MySQL 方言未实现（`store.open()` 返回 not-implemented），多方言 CI 矩阵阻塞于此 → task-0002。
+- **已知实现缺口**（spec/openapi 已标注，分别归属后续 task）：
+  1. ~~同步状态 HTTP 端点 `/v1/sync/*` 契约就位但未装配~~ → **已装配（GHO-36）**：经 `server.NewRouter` 挂载 status/runs/trigger，trigger 异步执行。
+  2. ~~查询端点 `/v1/addresses*` 鉴权为放行占位~~ → **已接入真实 Bearer 鉴权（GHO-36）**：占位中间件移除，查询/sync 状态需 `read`|`admin`，trigger 仅 `admin`。
+  3. `TokenRepository` 为进程内 `MemoryStore`，重启丢失 → task-0002 GORM store 替换（GHO-34 已落地持久化）。
+  4. PG/MySQL 方言未实现（`store.open()` 返回 not-implemented），多方言 CI 矩阵阻塞于此 → task-0002（GHO-34 已接入）。
   5. React 前端与前端交互测试 → task-0009。
 - 选型说明：实际 HTTP 路由采用标准库 `net/http`（Go 1.22 method 路由）而非 §3 表中规划的 chi/oapi-codegen，以保持零额外依赖；openapi.yaml 仍为 spec-first 契约源。
 
