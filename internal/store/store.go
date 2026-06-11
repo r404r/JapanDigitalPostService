@@ -19,19 +19,21 @@ import (
 
 // Options 控制 DB 连接的健壮性参数（docs/architecture.md §9）。
 type Options struct {
-	Driver          string
-	DSN             string
-	ConnectTimeout  time.Duration
-	MaxRetry        int
-	RetryBackoff    time.Duration
-	MaxOpenConns    int
-	MaxIdleConns    int
-	ConnMaxLifetime time.Duration
+	Driver             string
+	DSN                string
+	ConnectTimeout     time.Duration
+	MaxRetry           int
+	RetryBackoff       time.Duration
+	MaxOpenConns       int
+	MaxIdleConns       int
+	ConnMaxLifetime    time.Duration
+	LockReleaseTimeout time.Duration
 }
 
 // Store 持有 GORM 句柄并暴露各 repository。
 type Store struct {
-	db *gorm.DB
+	db                 *gorm.DB
+	lockReleaseTimeout time.Duration
 }
 
 // Open 按 driver 建立连接，带连接超时与退避重试，并执行迁移。
@@ -41,6 +43,9 @@ func Open(ctx context.Context, opt Options) (*Store, error) {
 	}
 	if opt.ConnectTimeout <= 0 {
 		opt.ConnectTimeout = 5 * time.Second
+	}
+	if opt.LockReleaseTimeout <= 0 {
+		opt.LockReleaseTimeout = 5 * time.Second
 	}
 
 	var db *gorm.DB
@@ -69,7 +74,7 @@ func Open(ctx context.Context, opt Options) (*Store, error) {
 		return nil, fmt.Errorf("configure pool: %w", err)
 	}
 
-	s := &Store{db: db}
+	s := &Store{db: db, lockReleaseTimeout: opt.LockReleaseTimeout}
 	if err := migrate(db); err != nil {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
@@ -142,7 +147,9 @@ func (s *Store) Tokens() domain.TokenRepository { return &tokenRepo{db: s.db} }
 func (s *Store) SyncRuns() domain.SyncRunRepository { return &syncRunRepo{db: s.db} }
 
 // Locker 返回同步互斥锁实现。
-func (s *Store) Locker() domain.Locker { return &dbLocker{db: s.db} }
+func (s *Store) Locker() domain.Locker {
+	return &dbLocker{db: s.db, releaseTimeout: s.lockReleaseTimeout}
+}
 
 // DB 暴露底层 *gorm.DB，供后续 task（查询/状态 API）复用。
 func (s *Store) DB() *gorm.DB { return s.db }

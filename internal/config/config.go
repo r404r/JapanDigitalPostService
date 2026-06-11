@@ -41,19 +41,20 @@ type Config struct {
 	DBConnMaxLifetime time.Duration // DB_CONN_MAX_LIFETIME
 
 	// 同步调度与引擎。
-	SyncCron           string        // SYNC_CRON
-	SyncSchedulerOn    bool          // SYNC_SCHEDULER_ENABLED（server 进程内调度开关）
-	SyncFullURL        string        // SYNC_FULL_URL
-	SyncAddURLTemplate string        // SYNC_ADD_URL_TEMPLATE（含 %s = YYMM）
-	SyncDelURLTemplate string        // SYNC_DEL_URL_TEMPLATE（含 %s = YYMM）
-	SyncBatchSize      int           // SYNC_BATCH_SIZE
-	SyncFullPrune      bool          // SYNC_FULL_PRUNE（全量后剪除消失地址）
-	SyncFullMinRows    int           // SYNC_FULL_MIN_ROWS（剪枝安全下限）
-	SyncDiffFallback   bool          // SYNC_DIFF_FALLBACK_FULL
-	SyncDiffLookback   int           // SYNC_DIFF_LOOKBACK_MONTHS
-	DownloadTimeout    time.Duration // DOWNLOAD_TIMEOUT（单次尝试）
-	DownloadMaxRetry   int           // DOWNLOAD_MAX_RETRY
-	DownloadBackoff    time.Duration // DOWNLOAD_RETRY_BACKOFF
+	SyncCron               string        // SYNC_CRON
+	SyncSchedulerOn        bool          // SYNC_SCHEDULER_ENABLED（server 进程内调度开关）
+	SyncFullURL            string        // SYNC_FULL_URL
+	SyncAddURLTemplate     string        // SYNC_ADD_URL_TEMPLATE（含 %s = YYMM）
+	SyncDelURLTemplate     string        // SYNC_DEL_URL_TEMPLATE（含 %s = YYMM）
+	SyncBatchSize          int           // SYNC_BATCH_SIZE
+	SyncFullPrune          bool          // SYNC_FULL_PRUNE（全量后剪除消失地址）
+	SyncFullMinRows        int           // SYNC_FULL_MIN_ROWS（剪枝安全下限）
+	SyncDiffFallback       bool          // SYNC_DIFF_FALLBACK_FULL
+	SyncDiffLookback       int           // SYNC_DIFF_LOOKBACK_MONTHS
+	SyncLockReleaseTimeout time.Duration // SYNC_LOCK_RELEASE_TIMEOUT
+	DownloadTimeout        time.Duration // DOWNLOAD_TIMEOUT（单次尝试）
+	DownloadMaxRetry       int           // DOWNLOAD_MAX_RETRY
+	DownloadBackoff        time.Duration // DOWNLOAD_RETRY_BACKOFF
 
 	// 认证（task-0006）。
 	AdminBootstrapToken string // ADMIN_BOOTSTRAP_TOKEN: 首个 admin token，引导用
@@ -92,19 +93,20 @@ func Load() Config {
 		DBMaxIdleConns:    getInt("DB_MAX_IDLE_CONNS", maxIdleDefault),
 		DBConnMaxLifetime: getDuration("DB_CONN_MAX_LIFETIME", lifetimeDefault),
 
-		SyncCron:           getEnv("SYNC_CRON", "0 3 * * *"),
-		SyncSchedulerOn:    getBool("SYNC_SCHEDULER_ENABLED", true),
-		SyncFullURL:        getEnv("SYNC_FULL_URL", defaultFullURL),
-		SyncAddURLTemplate: getEnv("SYNC_ADD_URL_TEMPLATE", defaultAddTmpl),
-		SyncDelURLTemplate: getEnv("SYNC_DEL_URL_TEMPLATE", defaultDelTmpl),
-		SyncBatchSize:      getInt("SYNC_BATCH_SIZE", 1000),
-		SyncFullPrune:      getBool("SYNC_FULL_PRUNE", true),
-		SyncFullMinRows:    getInt("SYNC_FULL_MIN_ROWS", 1000),
-		SyncDiffFallback:   getBool("SYNC_DIFF_FALLBACK_FULL", true),
-		SyncDiffLookback:   getInt("SYNC_DIFF_LOOKBACK_MONTHS", 3),
-		DownloadTimeout:    getDuration("DOWNLOAD_TIMEOUT", 60*time.Second),
-		DownloadMaxRetry:   getInt("DOWNLOAD_MAX_RETRY", 3),
-		DownloadBackoff:    getDuration("DOWNLOAD_RETRY_BACKOFF", time.Second),
+		SyncCron:               getEnv("SYNC_CRON", "0 3 * * *"),
+		SyncSchedulerOn:        getBool("SYNC_SCHEDULER_ENABLED", true),
+		SyncFullURL:            getEnv("SYNC_FULL_URL", defaultFullURL),
+		SyncAddURLTemplate:     getEnv("SYNC_ADD_URL_TEMPLATE", defaultAddTmpl),
+		SyncDelURLTemplate:     getEnv("SYNC_DEL_URL_TEMPLATE", defaultDelTmpl),
+		SyncBatchSize:          getInt("SYNC_BATCH_SIZE", 1000),
+		SyncFullPrune:          getBool("SYNC_FULL_PRUNE", true),
+		SyncFullMinRows:        getInt("SYNC_FULL_MIN_ROWS", 1000),
+		SyncDiffFallback:       getBool("SYNC_DIFF_FALLBACK_FULL", true),
+		SyncDiffLookback:       getInt("SYNC_DIFF_LOOKBACK_MONTHS", 3),
+		SyncLockReleaseTimeout: getDuration("SYNC_LOCK_RELEASE_TIMEOUT", 5*time.Second),
+		DownloadTimeout:        getDuration("DOWNLOAD_TIMEOUT", 60*time.Second),
+		DownloadMaxRetry:       getInt("DOWNLOAD_MAX_RETRY", 3),
+		DownloadBackoff:        getDuration("DOWNLOAD_RETRY_BACKOFF", time.Second),
 
 		AdminBootstrapToken: getEnv("ADMIN_BOOTSTRAP_TOKEN", ""),
 

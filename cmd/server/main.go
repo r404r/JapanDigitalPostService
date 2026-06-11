@@ -37,14 +37,15 @@ func main() {
 
 	// 读路径与同步共享同一 Store；DB 打开失败即退出（查询 API 离开 DB 无意义）。
 	st, err := store.Open(context.Background(), store.Options{
-		Driver:          cfg.DBDriver,
-		DSN:             cfg.DBDSN,
-		ConnectTimeout:  cfg.DBConnectTimeout,
-		MaxRetry:        cfg.DBMaxRetry,
-		RetryBackoff:    cfg.DBRetryBackoff,
-		MaxOpenConns:    cfg.DBMaxOpenConns,
-		MaxIdleConns:    cfg.DBMaxIdleConns,
-		ConnMaxLifetime: cfg.DBConnMaxLifetime,
+		Driver:             cfg.DBDriver,
+		DSN:                cfg.DBDSN,
+		ConnectTimeout:     cfg.DBConnectTimeout,
+		MaxRetry:           cfg.DBMaxRetry,
+		RetryBackoff:       cfg.DBRetryBackoff,
+		MaxOpenConns:       cfg.DBMaxOpenConns,
+		MaxIdleConns:       cfg.DBMaxIdleConns,
+		ConnMaxLifetime:    cfg.DBConnMaxLifetime,
+		LockReleaseTimeout: cfg.SyncLockReleaseTimeout,
 	})
 	if err != nil {
 		logger.Error("database init failed", "err", err)

@@ -10,6 +10,7 @@ func TestLoadDefaults(t *testing.T) {
 	for _, k := range []string{
 		"HTTP_ADDR", "STATIC_DIR", "HTTP_READ_HEADER_TIMEOUT", "HTTP_READ_TIMEOUT", "HTTP_WRITE_TIMEOUT", "HTTP_IDLE_TIMEOUT",
 		"QUERY_TIMEOUT", "FUZZY_LIMIT", "MAX_TOTAL", "DB_DRIVER", "DB_MAX_OPEN_CONNS", "DB_MAX_IDLE_CONNS", "DB_CONN_MAX_LIFETIME",
+		"SYNC_LOCK_RELEASE_TIMEOUT",
 	} {
 		t.Setenv(k, "")
 	}
@@ -34,6 +35,9 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.DBMaxOpenConns != 1 || cfg.DBMaxIdleConns != 1 || cfg.DBConnMaxLifetime != 0 {
 		t.Errorf("sqlite pool defaults = %d/%d/%v, want 1/1/0", cfg.DBMaxOpenConns, cfg.DBMaxIdleConns, cfg.DBConnMaxLifetime)
 	}
+	if cfg.SyncLockReleaseTimeout != 5*time.Second {
+		t.Errorf("SyncLockReleaseTimeout default = %v, want 5s", cfg.SyncLockReleaseTimeout)
+	}
 }
 
 func TestLoadOverrides(t *testing.T) {
@@ -48,6 +52,7 @@ func TestLoadOverrides(t *testing.T) {
 	t.Setenv("DB_MAX_OPEN_CONNS", "12")
 	t.Setenv("DB_MAX_IDLE_CONNS", "4")
 	t.Setenv("DB_CONN_MAX_LIFETIME", "30m")
+	t.Setenv("SYNC_LOCK_RELEASE_TIMEOUT", "750ms")
 	cfg := Load()
 	if cfg.HTTPAddr != ":9090" {
 		t.Errorf("HTTPAddr = %q, want :9090", cfg.HTTPAddr)
@@ -68,6 +73,9 @@ func TestLoadOverrides(t *testing.T) {
 	}
 	if cfg.DBMaxOpenConns != 12 || cfg.DBMaxIdleConns != 4 || cfg.DBConnMaxLifetime != 30*time.Minute {
 		t.Errorf("db pool = %d/%d/%v, want 12/4/30m", cfg.DBMaxOpenConns, cfg.DBMaxIdleConns, cfg.DBConnMaxLifetime)
+	}
+	if cfg.SyncLockReleaseTimeout != 750*time.Millisecond {
+		t.Errorf("SyncLockReleaseTimeout = %v, want 750ms", cfg.SyncLockReleaseTimeout)
 	}
 }
 

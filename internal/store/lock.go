@@ -25,7 +25,10 @@ type syncLockRow struct {
 
 func (syncLockRow) TableName() string { return "sync_locks" }
 
-type dbLocker struct{ db *gorm.DB }
+type dbLocker struct {
+	db             *gorm.DB
+	releaseTimeout time.Duration
+}
 
 // Acquire 通过条件 UPDATE 原子抢锁：仅当未锁定或锁已陈旧时成功。SQLite 单写者
 // 保证原子性；PG/MySQL 下条件 UPDATE 的 RowsAffected 同样可靠。
@@ -54,7 +57,13 @@ func (l *dbLocker) Acquire(ctx context.Context, holder string) (func() error, bo
 	// deferred release 误清掉新持有者的锁（否则会出现双写者）。条件不匹配时静默 no-op
 	// （RowsAffected=0 不视为错误——锁已不归我，无需释放）。
 	release := func() error {
-		return l.db.Model(&syncLockRow{}).Where("id = ? AND holder = ?", lockID, holder).
+		timeout := l.releaseTimeout
+		if timeout <= 0 {
+			timeout = 5 * time.Second
+		}
+		releaseCtx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		return l.db.WithContext(releaseCtx).Model(&syncLockRow{}).Where("id = ? AND holder = ?", lockID, holder).
 			Updates(map[string]any{"locked": false, "holder": ""}).Error
 	}
 	return release, true, nil

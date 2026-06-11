@@ -35,11 +35,12 @@ func TestOpenAppliesSQLitePoolDefaults(t *testing.T) {
 
 func TestOpenAppliesCustomPoolLimits(t *testing.T) {
 	st, err := Open(context.Background(), Options{
-		Driver:          "sqlite",
-		DSN:             filepath.Join(t.TempDir(), "pool.db"),
-		MaxOpenConns:    3,
-		MaxIdleConns:    2,
-		ConnMaxLifetime: time.Minute,
+		Driver:             "sqlite",
+		DSN:                filepath.Join(t.TempDir(), "pool.db"),
+		MaxOpenConns:       3,
+		MaxIdleConns:       2,
+		ConnMaxLifetime:    time.Minute,
+		LockReleaseTimeout: 750 * time.Millisecond,
 	})
 	if err != nil {
 		t.Fatalf("open: %v", err)
@@ -51,6 +52,13 @@ func TestOpenAppliesCustomPoolLimits(t *testing.T) {
 	}
 	if got := sqlDB.Stats().MaxOpenConnections; got != 3 {
 		t.Fatalf("MaxOpenConnections = %d, want 3", got)
+	}
+	locker, ok := st.Locker().(*dbLocker)
+	if !ok {
+		t.Fatalf("locker type = %T, want *dbLocker", st.Locker())
+	}
+	if locker.releaseTimeout != 750*time.Millisecond {
+		t.Fatalf("releaseTimeout = %v, want 750ms", locker.releaseTimeout)
 	}
 }
 
@@ -212,6 +220,23 @@ func TestLockMutualExclusion(t *testing.T) {
 	}
 	if _, ok3, _ := l.Acquire(ctx, "h3"); !ok3 {
 		t.Fatal("acquire after release should succeed")
+	}
+}
+
+func TestLockReleaseWorksAfterAcquireContextCanceled(t *testing.T) {
+	st := openTemp(t)
+	l := st.Locker()
+	ctx, cancel := context.WithCancel(context.Background())
+	release, ok, err := l.Acquire(ctx, "h1")
+	if err != nil || !ok {
+		t.Fatalf("acquire ok=%v err=%v", ok, err)
+	}
+	cancel()
+	if err := release(); err != nil {
+		t.Fatalf("release after acquire ctx cancel: %v", err)
+	}
+	if _, ok2, err := l.Acquire(context.Background(), "h2"); err != nil || !ok2 {
+		t.Fatalf("acquire after release ok=%v err=%v", ok2, err)
 	}
 }
 

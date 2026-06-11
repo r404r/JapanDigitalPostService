@@ -48,6 +48,7 @@ make ci           # 一键本地 CI：fmt + vet + build + test + 灵魂文件 + 
 | `DB_DRIVER` / `DB_DSN` | `sqlite` / `file:dev.db?...` | 数据库驱动与连接串（`sqlite` \| `postgres` \| `mysql` 三方言均已实现） |
 | `DB_MAX_OPEN_CONNS` / `DB_MAX_IDLE_CONNS` / `DB_CONN_MAX_LIFETIME` | SQLite: `1` / `1` / `0s`; PG/MySQL: `25` / `10` / `1h` | 统一配置 GORM 写路径与 raw SQL 读路径共享的底层连接池 |
 | `SYNC_CRON` | `0 3 * * *` | 进程内同步频率；`SYNC_SCHEDULER_ENABLED=false` 关闭 |
+| `SYNC_LOCK_RELEASE_TIMEOUT` | `5s` | 同步锁释放 DB 操作的短超时 |
 | `QUERY_TIMEOUT` / `FUZZY_LIMIT` / `MAX_TOTAL` | `2s` / `20` / `1000` | 查询超时 / 模糊上限 / 过多阈值 |
 | `ADMIN_BOOTSTRAP_TOKEN` | — | 引导 admin token（启动时按 hash 幂等注入） |
 | `PAYLOAD_ENCRYPTION` | `none` | `none`=仅 TLS（推荐）；`aes-gcm`=响应体 AES-256-GCM 封装 |
