@@ -17,9 +17,9 @@
 
 ## 2. 工作流（每个 task）
 1. 认领或新建一个 `task-xxxx.md`，严格按其"实施边界"工作，**不越界**改其它模块。
-2. 新建 task 时，`完成条件` 的最后一项必须是：`文档影响判定：检查 README、docs/spec.md、docs/architecture.md、docs/api/*、api/openapi.yaml 是否需要更新；需要则同步更新，不需要则说明无需更新。`
-3. 实现 → 写/更新可复用测试 → 本地通过 `make test`。
-4. **每完成一个 task，最后必须执行文档影响判定**：若改变对外行为，同步更新 `docs/spec.md`（含底部变更记录表）；若改变接口，同步更新 `api/openapi.yaml` 与 `docs/api/`；若改变部署/使用/架构，同步更新 README / architecture。即使无需更新，也要在 task 文档或最终说明中写明判断结果。
+2. 新建 task 时，`完成条件` 的最后一项必须是：`文档影响判定：检查 README、docs/spec.md、docs/architecture.md、docs/guide/、docs/api/*、api/openapi.yaml 是否需要更新；需要则同步更新，不需要则说明无需更新。`
+3. 实现 → 写/更新可复用测试 → 本地通过 `make test`；收口时运行 `make regression-report` 更新 `output/regression-report.txt`。
+4. **每完成一个 task，最后必须执行文档影响判定**：若改变对外行为，同步更新 `docs/spec.md`（含底部变更记录表）；若改变接口，同步更新 `api/openapi.yaml` 与 `docs/api/`；若改变部署/使用/架构，同步更新 README / architecture；若改变 UI 使用方式或截图，同步更新 `docs/guide/`。即使无需更新，也要在 task 文档或最终说明中写明判断结果。
 5. **每完成一个 task 提交一次**（一个 task = 一个聚焦 commit/PR）。
 6. 在对应 issue 说明：提交内容、验证方式、关键决策、剩余风险。
 
@@ -38,6 +38,8 @@
 
 ## 5. 测试
 - 每个功能 task 附带可复用测试；解析/查询/同步等核心逻辑必须有单元测试。
+- 单元测试以 Given / When / Then 组织；外部依赖必须使用 mock / fake / stub 隔离；只测试公开行为，不依赖私有实现细节。
+- 新增或变更代码必须追加或更新测试，并纳入统一回归集合（`make test` / `make regression-report`）。
 - 集成测试默认用 SQLite 内存库；多方言用 `deployments/docker-compose.yml`。
 - CI（`.github/workflows/ci.yml`）必须绿。
 

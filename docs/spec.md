@@ -179,6 +179,9 @@
 
 ## 9. 测试规格（可复用）
 
+- 单元测试按 Given / When / Then 组织；外部依赖使用 mock / fake / stub 隔离；测试只验证公开行为，不依赖私有实现细节。
+- 新增或变更代码必须追加或更新可复用测试，并纳入统一回归集合：`make test` 与 `make regression-report`。
+- `make regression-report` 运行 Go 回归并刷新 `output/regression-report.txt`，报告为纯文本覆盖率摘要，作为 git 管理对象随 task 提交；临时覆盖率数据不提交。
 - 单元：parser（用小 fixture CSV）、query service（limit/total/timeout）、auth（hash/scope）、applier（幂等/差分）。
 - 集成：repository 跑 SQLite 内存库（常态）；PG/MySQL 由 `deployments/docker-compose.yml` 起库，测试经 `TEST_POSTGRES_DSN` / `TEST_MYSQL_DSN` 注入 DSN（未设置则跳过）。本地一键 `make test-multidialect`；CI `store-multidialect` job 用 PG/MySQL service 容器常态回归。
 - 契约：OpenAPI 校验请求/响应。
@@ -235,3 +238,4 @@
 | 2026-06-11 | task-0023 | 修复 Claude Review #8：cron scheduler 持有可取消 root context，`Stop()` 会取消在跑调度同步并等待 job 退出。无 OpenAPI 变更。 |
 | 2026-06-11 | task-0024 | 修复 Claude Review #9：`DeleteByKeys` 从单事务逐行 DELETE 改为跨方言可移植的分批批量 DELETE，降低大差分废止文件下的锁持有时间与 round-trip。无 OpenAPI 变更。 |
 | 2026-06-11 | task-0025 | 修复 Claude Review #10：`DeleteNotIn` 改为按 id 分页扫描与分批剪枝，避免长游标跨 DELETE 阶段，并减少一次性 stale id 内存占用。无 OpenAPI 变更。 |
+| 2026-06-12 | GHO-40 | 强化 task 收口制度：文档影响判定纳入 `docs/guide/`，单元测试制度明确 Given/When/Then、mock/fake/stub、公开行为与新增/变更代码测试要求；新增 `make regression-report` 与 `output/regression-report.txt` 纯文本回归/覆盖率摘要管道。无 OpenAPI 变更。 |

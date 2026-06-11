@@ -1,4 +1,4 @@
-.PHONY: build run test test-multidialect db-up db-down lint tidy sync-soul gen web-install web-dev web-build web-test ci openapi-lint
+.PHONY: build run test regression-report test-multidialect db-up db-down lint tidy sync-soul gen web-install web-dev web-build web-test ci openapi-lint
 
 build:
 	go build -o bin/server ./cmd/server
@@ -9,6 +9,9 @@ run:
 
 test:
 	go test ./...
+
+regression-report:
+	./scripts/regression-report.sh
 
 # 本地一键多方言测试：起 PG/MySQL，等就绪，跑 store 集成测试。
 # 需要 docker。CI 用 service 容器跑同一组测试（.github/workflows/ci.yml）。
