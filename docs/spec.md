@@ -197,6 +197,9 @@
 
 ## 9. 测试规格（可复用）
 
+- 单元测试按 Given / When / Then 组织；外部依赖使用 mock / fake / stub 隔离；测试只验证公开行为，不依赖私有实现细节。
+- 新增或变更代码必须追加或更新可复用测试，并纳入统一回归集合：`make test` 与 `make regression-report`。
+- `make regression-report` 运行 Go 回归并刷新 `output/regression-report.txt`，报告为纯文本覆盖率摘要，作为 git 管理对象随 task 提交；临时覆盖率数据不提交。
 - 单元：parser（用小 fixture CSV）、query service（limit/total/timeout）、auth（hash/scope）、applier（幂等/差分）。
 - 集成：repository 跑 SQLite 内存库（常态）；PG/MySQL 由 `deployments/docker-compose.yml` 起库，测试经 `TEST_POSTGRES_DSN` / `TEST_MYSQL_DSN` 注入 DSN（未设置则跳过）。本地一键 `make test-multidialect`；CI `store-multidialect` job 用 PG/MySQL service 容器常态回归。
 - 契约：OpenAPI 校验请求/响应。
@@ -254,4 +257,5 @@
 | 2026-06-12 | GHO-42 | 新增 `POST /v1/sync/upload`（admin multipart）：支持日本郵政 `utf_ken_all` zip / UTF-8 csv 上传并按 full 导入；与 schedule/manual 共用同步锁，运行中返回 `sync_running`；`sync_runs.trigger=upload`、`source_url=upload:<filename>`；补充上传大小、zip 解压大小与 UTF-8 限制，以及日语结构化错误。 |
 | 2026-06-11 | task-0024 | 修复 Claude Review #9：`DeleteByKeys` 从单事务逐行 DELETE 改为跨方言可移植的分批批量 DELETE，降低大差分废止文件下的锁持有时间与 round-trip。无 OpenAPI 变更。 |
 | 2026-06-11 | task-0025 | 修复 Claude Review #10：`DeleteNotIn` 改为按 id 分页扫描与分批剪枝，避免长游标跨 DELETE 阶段，并减少一次性 stale id 内存占用。无 OpenAPI 变更。 |
+| 2026-06-12 | GHO-40 | 强化 task 收口制度：文档影响判定纳入 `docs/guide/`，单元测试制度明确 Given/When/Then、mock/fake/stub、公开行为与新增/变更代码测试要求；新增 `make regression-report` 与 `output/regression-report.txt` 纯文本回归/覆盖率摘要管道。无 OpenAPI 变更。 |
 | 2026-06-12 | GHO-41 (WP1) | 新增运行时抓取设置持久化与管理 API：`runtime_settings` 表（三方言 GORM AutoMigrate + `migrations/0002_*`），`download_max_retry`（默认 3，0–10）与 `scrape_full_url`（默认=当前全量 URL，https+日本邮便域名白名单 SSRF 校验、日语提示）可在管理画面配置且重启后保留；新增 `GET/PUT /v1/admin/settings`（admin），「恢复默认」用删除覆盖语义。引擎/fetcher 改为每次同步前解析有效配置（DB>env>默认，§3.6 / architecture §9.1），batch/手动触发/调度三路径无需重启即生效；上传路径不发起下载、不受影响。OpenAPI 增补 `/admin/settings` 与 `AdminSettings`/`AdminSettingsUpdate` schema。 |

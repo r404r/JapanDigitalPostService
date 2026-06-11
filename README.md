@@ -31,9 +31,11 @@
 ```bash
 make build        # 编译 bin/server 与 bin/batch
 make test         # 运行全部 Go 测试（SQLite 内存/临时库）
+make regression-report  # 运行 Go 回归并更新 output/regression-report.txt
 make ci           # 一键本地 CI：fmt + vet + build + test + 灵魂文件 + OpenAPI 校验
 ```
 
+`make regression-report` 生成纯文本回归与覆盖率摘要，报告路径为 `output/regression-report.txt`，该文件纳入 git 管理并随 task 收口提交；临时覆盖率文件 `output/coverage.out` 仍按 `.gitignore` 排除。
 `make ci` 等价于 `./scripts/ci.sh`，与 `.github/workflows/ci.yml` 行为对齐，建议提交前运行。
 
 ### 2. 配置

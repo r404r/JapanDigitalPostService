@@ -1,7 +1,9 @@
 # 任务索引与分派顺序
 
 每个 `task-xxxx.md` 含 goal / 完成条件 / 实施边界 / 依赖。**一个 task = 一次提交**。
-新建 task 时，完成条件的最后一项必须是文档影响判定：检查 README、`docs/spec.md`、`docs/architecture.md`、`docs/api/*`、`api/openapi.yaml` 是否需要更新；需要则同步更新，不需要则在 task 中说明无需更新。
+新建 task 时，完成条件的最后一项必须是文档影响判定：检查 README、`docs/spec.md`、`docs/architecture.md`、`docs/guide/`、`docs/api/*`、`api/openapi.yaml` 是否需要更新；需要则同步更新，不需要则在 task 中说明无需更新。
+新增或变更代码必须追加/更新测试；单元测试用 Given / When / Then 组织，外部依赖用 mock / fake / stub 隔离，只验证公开行为，并纳入 `make test` / `make regression-report` 统一回归集合。
+task 收口时运行 `make regression-report`，更新并提交 `output/regression-report.txt`（纯文本回归与覆盖率摘要）。
 Squad leader 按依赖逐个分派；backlog 任务不要一次性全部并行启动。
 
 ## 依赖与顺序

@@ -254,6 +254,7 @@
 ├── docs/                     # architecture / spec / api / guide / tasks
 │   ├── api/                  # 人读版 API 规格（OpenAPI 的 companion docs）
 │   └── guide/                # UI 使用手册与截图
+├── output/                   # task 收口回归报告（regression-report.txt 纳入 git）
 └── Makefile
 ```
 
@@ -271,6 +272,8 @@
 
 - **可复用测试**：核心逻辑（parser / applier / engine / query / auth / crypto / store）均有单元与集成测试，跑 SQLite，无外部依赖。端到端链路（同步 fixture → 查询 → token 鉴权）见 `internal/e2e`；边界 fixture 见 `internal/sync/testdata`。
 - **CI / 一键脚本**：`.github/workflows/ci.yml`（Go fmt/vet/build/test + 灵魂文件一致 + OpenAPI 校验）；本地 `make ci` / `scripts/ci.sh` 等价复现。
+- **单元测试制度**：Given / When / Then 组织测试；外部依赖用 mock / fake / stub 隔离；只验证公开行为；新增/变更代码必须追加或更新测试并纳入 `make test` / `make regression-report`。
+- **回归报告**：`make regression-report` 运行 Go 回归并刷新 `output/regression-report.txt`，报告为纯文本覆盖率摘要并纳入 git；临时 `output/coverage.out` 不提交。
 - **已知实现缺口**（spec/openapi 已标注，分别归属后续 task）：
   1. ~~同步状态 HTTP 端点 `/v1/sync/*` 契约就位但未装配~~ → **已装配（GHO-36）**：经 `server.NewRouter` 挂载 status/runs/trigger，trigger 异步执行。
   2. ~~查询端点 `/v1/addresses*` 鉴权为放行占位~~ → **已接入真实 Bearer 鉴权（GHO-36）**：占位中间件移除，查询/sync 状态需 `read`|`admin`，trigger 仅 `admin`。
