@@ -17,7 +17,8 @@
 
 - **存储层**：GORM 三方言（SQLite / PostgreSQL / MySQL）均已实现，含可移植迁移 SQL（`migrations/`）与多方言集成测试；token 持久化落库（重启不丢）。
 - **同步**：`utf_ken_all` 全量/差分引擎（幂等、进程内 cron 调度、DB 锁、保守 fallback），`cmd/batch` 独立入口，HTTP 手动触发（`POST /v1/sync/trigger`，支持 `auto|full|diff`，异步执行）。
-- **API**：地址查询（超时/上限/截断状态）、同步状态/历史、token 发行/管理。全部数据端点已接入**真实 Bearer 鉴权**（read/admin scope，`/v1/health` 公开），可选 AES-256-GCM 载荷加密。
+- **API**：地址查询（超时/上限/截断状态）、同步状态/历史、token 发行/管理、运行时抓取设置（`GET/PUT /v1/admin/settings`，admin）。全部数据端点已接入**真实 Bearer 鉴权**（read/admin scope，`/v1/health` 公开），可选 AES-256-GCM 载荷加密。
+- **运行时设置**：抓取重试次数（`download_max_retry`，默认 3）与全量 URL（`scrape_full_url`）可在管理画面在线配置、持久化重启后保留（DB 覆盖 > env > 默认）；URL 校验含 SSRF 防护（https + 日本邮便官方域名），引擎每次同步前解析，无需重启即生效。
 - **前端**（`web/`，Vite + React + TS）：地址查询页 + 后台管理区（触发同步 自动/强制全量/强制差分、同步状态与历史、token 发行/管理）。
 - **质量**：单元/集成/端到端测试、边界 fixture、CI（fmt/vet/build/test + 多方言矩阵 + OpenAPI 校验 + 灵魂文件一致性）。
 

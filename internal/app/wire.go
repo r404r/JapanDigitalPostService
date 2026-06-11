@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/r404r/JapanDigitalPostService/internal/config"
+	"github.com/r404r/JapanDigitalPostService/internal/settings"
 	"github.com/r404r/JapanDigitalPostService/internal/store"
 	syncpkg "github.com/r404r/JapanDigitalPostService/internal/sync"
 )
@@ -63,11 +64,22 @@ func CleanupStaleRunningSyncs(ctx context.Context, st *store.Store, logger *slog
 	return nil
 }
 
+// BuildSettings 构造运行时设置服务：基线默认值取自配置（env 优先，缺省落到代码
+// 常量），DB 覆盖值由 store 持久化。同步引擎与管理 API 共享同一服务，保证
+// 全量 URL / 下载重试的有效值在两处一致。
+func BuildSettings(st *store.Store, cfg config.Config) *settings.Service {
+	return settings.NewService(st.Settings(), settings.Defaults{
+		ScrapeFullURL:    cfg.SyncFullURL,
+		DownloadMaxRetry: cfg.DownloadMaxRetry,
+	}, time.Now)
+}
+
 // BuildEngine 在一个已打开的 Store 上构造同步 Engine，供与读路径共享同一
-// 连接池的入口（cmd/server）复用。
+// 连接池的入口（cmd/server）复用。引擎绑定运行时设置解析器，使管理画面配置的
+// 全量 URL / 下载重试在每次同步前生效（batch / 手动触发 / 进程内调度三路径一致）。
 func BuildEngine(st *store.Store, cfg config.Config, logger *slog.Logger) *syncpkg.Engine {
 	fetcher := syncpkg.NewHTTPFetcher(cfg.DownloadTimeout, cfg.DownloadMaxRetry, cfg.DownloadBackoff, logger)
-	return syncpkg.NewEngine(st.Addresses(), st.SyncRuns(), st.Locker(), fetcher, syncpkg.Options{
+	eng := syncpkg.NewEngine(st.Addresses(), st.SyncRuns(), st.Locker(), fetcher, syncpkg.Options{
 		FullURL:            cfg.SyncFullURL,
 		AddURLTemplate:     cfg.SyncAddURLTemplate,
 		DelURLTemplate:     cfg.SyncDelURLTemplate,
@@ -77,4 +89,5 @@ func BuildEngine(st *store.Store, cfg config.Config, logger *slog.Logger) *syncp
 		DiffFallbackFull:   cfg.SyncDiffFallback,
 		DiffLookbackMonths: cfg.SyncDiffLookback,
 	}, logger)
+	return eng.UseSettingsResolver(BuildSettings(st, cfg))
 }

@@ -1,0 +1,202 @@
+JapanDigitalPostService 回归测试 report
+command: go test ./... -coverprofile=output/coverage.out
+RESULT: PASS
+
+== 包级结果（去除耗时/缓存标记并排序，保证可复现）==
+	github.com/r404r/JapanDigitalPostService/cmd/batch		coverage: 0.0% of statements
+	github.com/r404r/JapanDigitalPostService/cmd/server		coverage: 0.0% of statements
+	github.com/r404r/JapanDigitalPostService/internal/app		coverage: 0.0% of statements
+	github.com/r404r/JapanDigitalPostService/internal/domain		coverage: 0.0% of statements
+?   	github.com/r404r/JapanDigitalPostService/internal/version	[no test files]
+ok  	github.com/r404r/JapanDigitalPostService/internal/auth	coverage: 73.0% of statements
+ok  	github.com/r404r/JapanDigitalPostService/internal/config	coverage: 90.5% of statements
+ok  	github.com/r404r/JapanDigitalPostService/internal/crypto	coverage: 86.5% of statements
+ok  	github.com/r404r/JapanDigitalPostService/internal/e2e	coverage: 92.5% of statements
+ok  	github.com/r404r/JapanDigitalPostService/internal/query	coverage: 45.9% of statements
+ok  	github.com/r404r/JapanDigitalPostService/internal/server	coverage: 85.4% of statements
+ok  	github.com/r404r/JapanDigitalPostService/internal/settings	coverage: 59.6% of statements
+ok  	github.com/r404r/JapanDigitalPostService/internal/store	coverage: 82.7% of statements
+ok  	github.com/r404r/JapanDigitalPostService/internal/sync	coverage: 84.2% of statements
+
+== 覆盖率（go tool cover -func）==
+github.com/r404r/JapanDigitalPostService/cmd/batch/main.go:21:				main				0.0%
+github.com/r404r/JapanDigitalPostService/cmd/server/main.go:33:				main				0.0%
+github.com/r404r/JapanDigitalPostService/cmd/server/settings_adapter.go:17:		Get				0.0%
+github.com/r404r/JapanDigitalPostService/cmd/server/settings_adapter.go:25:		Update				0.0%
+github.com/r404r/JapanDigitalPostService/cmd/server/settings_adapter.go:45:		toServerView			0.0%
+github.com/r404r/JapanDigitalPostService/internal/app/wire.go:24:			Close				0.0%
+github.com/r404r/JapanDigitalPostService/internal/app/wire.go:27:			BuildSync			0.0%
+github.com/r404r/JapanDigitalPostService/internal/app/wire.go:52:			CleanupStaleRunningSyncs	0.0%
+github.com/r404r/JapanDigitalPostService/internal/app/wire.go:70:			BuildSettings			0.0%
+github.com/r404r/JapanDigitalPostService/internal/app/wire.go:80:			BuildEngine			0.0%
+github.com/r404r/JapanDigitalPostService/internal/auth/http.go:20:			TokenFromContext		0.0%
+github.com/r404r/JapanDigitalPostService/internal/auth/http.go:28:			RequireScope			83.3%
+github.com/r404r/JapanDigitalPostService/internal/auth/http.go:56:			bearerToken			80.0%
+github.com/r404r/JapanDigitalPostService/internal/auth/http.go:78:			NewHandlers			100.0%
+github.com/r404r/JapanDigitalPostService/internal/auth/http.go:94:			toInfo				100.0%
+github.com/r404r/JapanDigitalPostService/internal/auth/http.go:119:			CreateToken			80.0%
+github.com/r404r/JapanDigitalPostService/internal/auth/http.go:155:			ListTokens			66.7%
+github.com/r404r/JapanDigitalPostService/internal/auth/http.go:170:			RevokeToken			58.3%
+github.com/r404r/JapanDigitalPostService/internal/auth/http.go:189:			decodeJSON			100.0%
+github.com/r404r/JapanDigitalPostService/internal/auth/http.go:196:			writeJSON			100.0%
+github.com/r404r/JapanDigitalPostService/internal/auth/http.go:210:			writeError			100.0%
+github.com/r404r/JapanDigitalPostService/internal/auth/memstore.go:25:			NewMemoryStore			100.0%
+github.com/r404r/JapanDigitalPostService/internal/auth/memstore.go:32:			Create				100.0%
+github.com/r404r/JapanDigitalPostService/internal/auth/memstore.go:41:			GetByHash			100.0%
+github.com/r404r/JapanDigitalPostService/internal/auth/memstore.go:52:			List				90.9%
+github.com/r404r/JapanDigitalPostService/internal/auth/memstore.go:70:			Revoke				100.0%
+github.com/r404r/JapanDigitalPostService/internal/auth/memstore.go:84:			TouchLastUsed			87.5%
+github.com/r404r/JapanDigitalPostService/internal/auth/service.go:34:			NewService			66.7%
+github.com/r404r/JapanDigitalPostService/internal/auth/service.go:55:			Issue				84.2%
+github.com/r404r/JapanDigitalPostService/internal/auth/service.go:96:			Authenticate			92.9%
+github.com/r404r/JapanDigitalPostService/internal/auth/service.go:120:			List				100.0%
+github.com/r404r/JapanDigitalPostService/internal/auth/service.go:125:			Revoke				100.0%
+github.com/r404r/JapanDigitalPostService/internal/auth/service.go:131:			EnsureBootstrap			80.0%
+github.com/r404r/JapanDigitalPostService/internal/auth/token.go:21:			generatePlaintext		75.0%
+github.com/r404r/JapanDigitalPostService/internal/auth/token.go:30:			hashToken			100.0%
+github.com/r404r/JapanDigitalPostService/internal/auth/token.go:36:			prefixOf			66.7%
+github.com/r404r/JapanDigitalPostService/internal/auth/token.go:45:			newUUID				83.3%
+github.com/r404r/JapanDigitalPostService/internal/config/config.go:73:			Load				100.0%
+github.com/r404r/JapanDigitalPostService/internal/config/config.go:121:			dbPoolDefaults			100.0%
+github.com/r404r/JapanDigitalPostService/internal/config/config.go:128:			getEnv				100.0%
+github.com/r404r/JapanDigitalPostService/internal/config/config.go:135:			getInt				100.0%
+github.com/r404r/JapanDigitalPostService/internal/config/config.go:144:			getBool				50.0%
+github.com/r404r/JapanDigitalPostService/internal/config/config.go:153:			getDuration			100.0%
+github.com/r404r/JapanDigitalPostService/internal/crypto/crypto.go:63:			New				86.7%
+github.com/r404r/JapanDigitalPostService/internal/crypto/crypto.go:90:			Enabled				100.0%
+github.com/r404r/JapanDigitalPostService/internal/crypto/crypto.go:94:			Encrypt				85.7%
+github.com/r404r/JapanDigitalPostService/internal/crypto/crypto.go:113:			Decrypt				85.7%
+github.com/r404r/JapanDigitalPostService/internal/crypto/crypto.go:136:			EncryptJSON			75.0%
+github.com/r404r/JapanDigitalPostService/internal/crypto/middleware.go:20:		Middleware			86.4%
+github.com/r404r/JapanDigitalPostService/internal/crypto/middleware.go:61:		Header				100.0%
+github.com/r404r/JapanDigitalPostService/internal/crypto/middleware.go:63:		WriteHeader			75.0%
+github.com/r404r/JapanDigitalPostService/internal/crypto/middleware.go:71:		Write				100.0%
+github.com/r404r/JapanDigitalPostService/internal/crypto/middleware.go:78:		copyHeader			100.0%
+github.com/r404r/JapanDigitalPostService/internal/domain/address.go:38:			TableName			100.0%
+github.com/r404r/JapanDigitalPostService/internal/domain/address.go:53:			Key				100.0%
+github.com/r404r/JapanDigitalPostService/internal/domain/address.go:60:			ComputeHash			100.0%
+github.com/r404r/JapanDigitalPostService/internal/domain/settings.go:29:		TableName			100.0%
+github.com/r404r/JapanDigitalPostService/internal/domain/syncrun.go:53:			TableName			100.0%
+github.com/r404r/JapanDigitalPostService/internal/domain/token.go:19:			Valid				100.0%
+github.com/r404r/JapanDigitalPostService/internal/domain/token.go:25:			Satisfies			100.0%
+github.com/r404r/JapanDigitalPostService/internal/domain/token.go:59:			TableName			100.0%
+github.com/r404r/JapanDigitalPostService/internal/domain/token.go:62:			Active				85.7%
+github.com/r404r/JapanDigitalPostService/internal/query/service.go:48:			Error				0.0%
+github.com/r404r/JapanDigitalPostService/internal/query/service.go:69:			NewService			60.0%
+github.com/r404r/JapanDigitalPostService/internal/query/service.go:80:			Search				88.9%
+github.com/r404r/JapanDigitalPostService/internal/query/service.go:127:			GetByZipcode			90.9%
+github.com/r404r/JapanDigitalPostService/internal/query/service.go:155:			repoError			100.0%
+github.com/r404r/JapanDigitalPostService/internal/query/service.go:162:			invalid				100.0%
+github.com/r404r/JapanDigitalPostService/internal/query/service.go:166:			isZipcodeExact			100.0%
+github.com/r404r/JapanDigitalPostService/internal/query/service.go:170:			isZipcodePrefix			100.0%
+github.com/r404r/JapanDigitalPostService/internal/query/service.go:174:			allDigits			100.0%
+github.com/r404r/JapanDigitalPostService/internal/server/handlers.go:44:		toAddressDTO			100.0%
+github.com/r404r/JapanDigitalPostService/internal/server/handlers.go:57:		toSearchDTO			100.0%
+github.com/r404r/JapanDigitalPostService/internal/server/handlers.go:84:		health				100.0%
+github.com/r404r/JapanDigitalPostService/internal/server/handlers.go:92:		searchAddresses			87.5%
+github.com/r404r/JapanDigitalPostService/internal/server/handlers.go:125:		getByZipcode			100.0%
+github.com/r404r/JapanDigitalPostService/internal/server/handlers.go:138:		writeError			100.0%
+github.com/r404r/JapanDigitalPostService/internal/server/handlers.go:153:		parseIntParam			100.0%
+github.com/r404r/JapanDigitalPostService/internal/server/handlers.go:165:		writeJSON			100.0%
+github.com/r404r/JapanDigitalPostService/internal/server/middleware.go:20:		requestIDMiddleware		100.0%
+github.com/r404r/JapanDigitalPostService/internal/server/middleware.go:33:		requestIDFrom			66.7%
+github.com/r404r/JapanDigitalPostService/internal/server/middleware.go:40:		newRequestID			75.0%
+github.com/r404r/JapanDigitalPostService/internal/server/middleware.go:49:		chain				100.0%
+github.com/r404r/JapanDigitalPostService/internal/server/router.go:63:			NewRouter			90.6%
+github.com/r404r/JapanDigitalPostService/internal/server/settings_handlers.go:42:	Error				0.0%
+github.com/r404r/JapanDigitalPostService/internal/server/settings_handlers.go:44:	settingsValidationMessage	75.0%
+github.com/r404r/JapanDigitalPostService/internal/server/settings_handlers.go:77:	getSettings			62.5%
+github.com/r404r/JapanDigitalPostService/internal/server/settings_handlers.go:93:	putSettings			80.0%
+github.com/r404r/JapanDigitalPostService/internal/server/settings_handlers.go:121:	toSettingsDTO			100.0%
+github.com/r404r/JapanDigitalPostService/internal/server/static.go:12:			WithStaticFiles			93.8%
+github.com/r404r/JapanDigitalPostService/internal/server/sync_handlers.go:45:		toSyncRunDTO			100.0%
+github.com/r404r/JapanDigitalPostService/internal/server/sync_handlers.go:66:		nilIfEmpty			100.0%
+github.com/r404r/JapanDigitalPostService/internal/server/sync_handlers.go:74:		syncStatus			65.2%
+github.com/r404r/JapanDigitalPostService/internal/server/sync_handlers.go:110:		syncRuns			77.8%
+github.com/r404r/JapanDigitalPostService/internal/server/sync_handlers.go:142:		syncTrigger			82.4%
+github.com/r404r/JapanDigitalPostService/internal/server/sync_handlers.go:170:		writeStatusError		75.0%
+github.com/r404r/JapanDigitalPostService/internal/server/sync_handlers.go:180:		decodeJSON			100.0%
+github.com/r404r/JapanDigitalPostService/internal/settings/service.go:50:		NewService			100.0%
+github.com/r404r/JapanDigitalPostService/internal/settings/service.go:64:		Error				100.0%
+github.com/r404r/JapanDigitalPostService/internal/settings/service.go:80:		ResolveSyncSettings		100.0%
+github.com/r404r/JapanDigitalPostService/internal/settings/service.go:92:		Get				100.0%
+github.com/r404r/JapanDigitalPostService/internal/settings/service.go:96:		resolve				100.0%
+github.com/r404r/JapanDigitalPostService/internal/settings/service.go:132:		Update				85.2%
+github.com/r404r/JapanDigitalPostService/internal/settings/service.go:184:		validateRetry			100.0%
+github.com/r404r/JapanDigitalPostService/internal/settings/service.go:196:		validateScrapeURL		100.0%
+github.com/r404r/JapanDigitalPostService/internal/settings/service.go:220:		IsValidation			100.0%
+github.com/r404r/JapanDigitalPostService/internal/store/address_read_repo.go:23:	NewAddressReadRepo		100.0%
+github.com/r404r/JapanDigitalPostService/internal/store/address_read_repo.go:28:	NewAddressReadRepoForDriver	100.0%
+github.com/r404r/JapanDigitalPostService/internal/store/address_read_repo.go:41:	Search				82.1%
+github.com/r404r/JapanDigitalPostService/internal/store/address_read_repo.go:89:	CountAll			75.0%
+github.com/r404r/JapanDigitalPostService/internal/store/address_read_repo.go:101:	buildWhere			95.7%
+github.com/r404r/JapanDigitalPostService/internal/store/address_read_repo.go:139:	escapeLike			100.0%
+github.com/r404r/JapanDigitalPostService/internal/store/address_read_repo.go:144:	rebindPlaceholders		100.0%
+github.com/r404r/JapanDigitalPostService/internal/store/address_repo.go:17:		Count				100.0%
+github.com/r404r/JapanDigitalPostService/internal/store/address_repo.go:25:		ExistingHashes			86.4%
+github.com/r404r/JapanDigitalPostService/internal/store/address_repo.go:62:		UpsertBatch			66.7%
+github.com/r404r/JapanDigitalPostService/internal/store/address_repo.go:76:		DeleteByKeys			84.6%
+github.com/r404r/JapanDigitalPostService/internal/store/address_repo.go:96:		addressKeysPredicate		100.0%
+github.com/r404r/JapanDigitalPostService/internal/store/address_repo.go:111:		DeleteNotIn			87.5%
+github.com/r404r/JapanDigitalPostService/internal/store/lock.go:26:			TableName			100.0%
+github.com/r404r/JapanDigitalPostService/internal/store/lock.go:35:			Acquire				82.4%
+github.com/r404r/JapanDigitalPostService/internal/store/settings_repo.go:20:		GetAll				85.7%
+github.com/r404r/JapanDigitalPostService/internal/store/settings_repo.go:34:		Set				100.0%
+github.com/r404r/JapanDigitalPostService/internal/store/settings_repo.go:44:		Delete				100.0%
+github.com/r404r/JapanDigitalPostService/internal/store/sqlite.go:20:			OpenSQLite			63.6%
+github.com/r404r/JapanDigitalPostService/internal/store/sqlite.go:57:			SeedSampleIfEmpty		77.8%
+github.com/r404r/JapanDigitalPostService/internal/store/store.go:40:			Open				76.0%
+github.com/r404r/JapanDigitalPostService/internal/store/store.go:84:			open				50.0%
+github.com/r404r/JapanDigitalPostService/internal/store/store.go:104:			ping				83.3%
+github.com/r404r/JapanDigitalPostService/internal/store/store.go:114:			configurePool			90.0%
+github.com/r404r/JapanDigitalPostService/internal/store/store.go:129:			defaultPoolOptions		66.7%
+github.com/r404r/JapanDigitalPostService/internal/store/store.go:136:			migrate				100.0%
+github.com/r404r/JapanDigitalPostService/internal/store/store.go:141:			Addresses			100.0%
+github.com/r404r/JapanDigitalPostService/internal/store/store.go:144:			Tokens				100.0%
+github.com/r404r/JapanDigitalPostService/internal/store/store.go:147:			SyncRuns			100.0%
+github.com/r404r/JapanDigitalPostService/internal/store/store.go:150:			Settings			100.0%
+github.com/r404r/JapanDigitalPostService/internal/store/store.go:153:			Locker				100.0%
+github.com/r404r/JapanDigitalPostService/internal/store/store.go:158:			DB				100.0%
+github.com/r404r/JapanDigitalPostService/internal/store/store.go:161:			Close				75.0%
+github.com/r404r/JapanDigitalPostService/internal/store/syncrun_repo.go:14:		Create				100.0%
+github.com/r404r/JapanDigitalPostService/internal/store/syncrun_repo.go:18:		Update				0.0%
+github.com/r404r/JapanDigitalPostService/internal/store/syncrun_repo.go:22:		Latest				100.0%
+github.com/r404r/JapanDigitalPostService/internal/store/syncrun_repo.go:26:		LatestSuccess			100.0%
+github.com/r404r/JapanDigitalPostService/internal/store/syncrun_repo.go:31:		first				71.4%
+github.com/r404r/JapanDigitalPostService/internal/store/syncrun_repo.go:43:		List				71.4%
+github.com/r404r/JapanDigitalPostService/internal/store/syncrun_repo.go:56:		CountRunning			100.0%
+github.com/r404r/JapanDigitalPostService/internal/store/syncrun_repo.go:63:		MarkRunningFailed		86.7%
+github.com/r404r/JapanDigitalPostService/internal/store/token_repo.go:21:		Create				100.0%
+github.com/r404r/JapanDigitalPostService/internal/store/token_repo.go:30:		GetByHash			85.7%
+github.com/r404r/JapanDigitalPostService/internal/store/token_repo.go:44:		List				80.0%
+github.com/r404r/JapanDigitalPostService/internal/store/token_repo.go:55:		Revoke				80.0%
+github.com/r404r/JapanDigitalPostService/internal/store/token_repo.go:78:		TouchLastUsed			83.3%
+github.com/r404r/JapanDigitalPostService/internal/sync/applier.go:26:			applyBatch			90.0%
+github.com/r404r/JapanDigitalPostService/internal/sync/applier.go:60:			ApplyFull			83.3%
+github.com/r404r/JapanDigitalPostService/internal/sync/applier.go:118:			ApplyDiff			83.8%
+github.com/r404r/JapanDigitalPostService/internal/sync/downloader.go:51:		NewHTTPFetcher			100.0%
+github.com/r404r/JapanDigitalPostService/internal/sync/downloader.go:67:		SetMaxRetry			66.7%
+github.com/r404r/JapanDigitalPostService/internal/sync/downloader.go:75:		MaxRetry			100.0%
+github.com/r404r/JapanDigitalPostService/internal/sync/downloader.go:77:		Fetch				89.5%
+github.com/r404r/JapanDigitalPostService/internal/sync/downloader.go:113:		fetchOnce			81.0%
+github.com/r404r/JapanDigitalPostService/internal/sync/downloader.go:150:		openZipCSV			71.4%
+github.com/r404r/JapanDigitalPostService/internal/sync/engine.go:66:			NewEngine			88.9%
+github.com/r404r/JapanDigitalPostService/internal/sync/engine.go:93:			UseSettingsResolver		100.0%
+github.com/r404r/JapanDigitalPostService/internal/sync/engine.go:101:			Run				75.0%
+github.com/r404r/JapanDigitalPostService/internal/sync/engine.go:134:			TriggerAsync			74.1%
+github.com/r404r/JapanDigitalPostService/internal/sync/engine.go:177:			Shutdown			87.5%
+github.com/r404r/JapanDigitalPostService/internal/sync/engine.go:193:			resolveType			88.9%
+github.com/r404r/JapanDigitalPostService/internal/sync/engine.go:210:			beginRun			80.0%
+github.com/r404r/JapanDigitalPostService/internal/sync/engine.go:227:			execute				87.1%
+github.com/r404r/JapanDigitalPostService/internal/sync/engine.go:277:			resolveRuntime			100.0%
+github.com/r404r/JapanDigitalPostService/internal/sync/engine.go:296:			runFull				100.0%
+github.com/r404r/JapanDigitalPostService/internal/sync/engine.go:308:			runDiff				87.5%
+github.com/r404r/JapanDigitalPostService/internal/sync/engine.go:377:			holder				100.0%
+github.com/r404r/JapanDigitalPostService/internal/sync/engine.go:387:			monthsWindow			87.5%
+github.com/r404r/JapanDigitalPostService/internal/sync/parser.go:42:			ParseStream			87.0%
+github.com/r404r/JapanDigitalPostService/internal/sync/parser.go:77:			rowToAddress			100.0%
+github.com/r404r/JapanDigitalPostService/internal/sync/parser.go:101:			atoiFlag			75.0%
+github.com/r404r/JapanDigitalPostService/internal/sync/scheduler.go:23:			NewScheduler			78.6%
+github.com/r404r/JapanDigitalPostService/internal/sync/scheduler.go:47:			Start				100.0%
+github.com/r404r/JapanDigitalPostService/internal/sync/scheduler.go:50:			Stop				100.0%
+total:											(statements)			78.3%

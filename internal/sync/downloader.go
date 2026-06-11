@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -33,32 +34,51 @@ type Fetcher interface {
 }
 
 // HTTPFetcher 通过 HTTP 获取 zip，带每次尝试超时与指数退避重试。
+//
+// 重试次数（maxRetry）用原子存储，因为同步引擎在每次运行前会按管理画面配置
+// 调用 SetMaxRetry 更新它（“download_max_retry 重启后保留且即时生效”），而不同
+// 触发路径可能在不同 goroutine（被 DB 锁串行化）。原子读写避免数据竞争。
 type HTTPFetcher struct {
 	Client       *http.Client
 	Timeout      time.Duration // 单次尝试超时
-	MaxRetry     int           // 额外重试次数
 	RetryBackoff time.Duration // 退避基数（第 n 次重试等待 backoff*2^(n-1)）
 	Logger       *slog.Logger
+	maxRetry     atomic.Int64 // 额外重试次数（可由 SetMaxRetry 运行时更新）
 }
 
-// NewHTTPFetcher 构造带健壮性参数的 fetcher。
+// NewHTTPFetcher 构造带健壮性参数的 fetcher。maxRetry 为初始默认值（无 DB 覆盖时
+// 沿用），运行时可由引擎按管理画面配置调整。
 func NewHTTPFetcher(timeout time.Duration, maxRetry int, backoff time.Duration, logger *slog.Logger) *HTTPFetcher {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &HTTPFetcher{
+	f := &HTTPFetcher{
 		Client:       &http.Client{},
 		Timeout:      timeout,
-		MaxRetry:     maxRetry,
 		RetryBackoff: backoff,
 		Logger:       logger,
 	}
+	f.SetMaxRetry(maxRetry)
+	return f
 }
+
+// SetMaxRetry 更新额外重试次数（负数归零）。供引擎在每次同步前注入管理画面配置的
+// 有效值，使下载重试无需重启即可生效。
+func (f *HTTPFetcher) SetMaxRetry(n int) {
+	if n < 0 {
+		n = 0
+	}
+	f.maxRetry.Store(int64(n))
+}
+
+// MaxRetry 返回当前生效的额外重试次数。
+func (f *HTTPFetcher) MaxRetry() int { return int(f.maxRetry.Load()) }
 
 func (f *HTTPFetcher) Fetch(ctx context.Context, url string) (*SourceFile, error) {
 	var data []byte
 	var lastErr error
-	for attempt := 0; attempt <= f.MaxRetry; attempt++ {
+	maxRetry := f.MaxRetry()
+	for attempt := 0; attempt <= maxRetry; attempt++ {
 		if attempt > 0 {
 			wait := f.RetryBackoff * (1 << (attempt - 1))
 			f.Logger.Warn("retrying download", "url", url, "attempt", attempt, "wait", wait.String(), "err", lastErr)

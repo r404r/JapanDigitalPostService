@@ -112,6 +112,8 @@ func main() {
 	// 保持 server 包与 auth 包解耦；与 internal/e2e 共用同一装配入口。
 	reader := store.NewAddressReadRepoForDriver(sqlDB, cfg.DBDriver)
 	svc := query.NewService(reader, cfg.FuzzyLimit, cfg.MaxTotal)
+	// 管理画面运行时设置：与同步引擎共享同一基线默认值，DB 覆盖值持久化、重启后保留。
+	settingsAPI := settingsAdapter{svc: app.BuildSettings(st, cfg)}
 	router := server.NewRouter(server.Options{
 		QueryService:  svc,
 		QueryTimeout:  cfg.QueryTimeout,
@@ -121,6 +123,7 @@ func main() {
 		SyncTrigger:   engine,
 		Auth:          authSvc,
 		TokenHandlers: tokenHandlers,
+		Settings:      settingsAPI,
 	})
 
 	var rootHandler http.Handler = router

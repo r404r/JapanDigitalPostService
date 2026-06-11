@@ -10,6 +10,9 @@
 ## 现有迁移
 
 - `0001_init.sqlite.sql` / `0001_init.postgres.sql` / `0001_init.mysql.sql`
+- `0002_runtime_settings.sqlite.sql` / `0002_runtime_settings.postgres.sql` / `0002_runtime_settings.mysql.sql`
+  —— 管理画面可配置、重启后保留的运行时设置表 `runtime_settings(key PK, value, updated_at)`，
+  与 `internal/domain.RuntimeSetting` / GORM AutoMigrate 一一对应。MySQL 下 `key` 为保留字需反引号。
 
 关键约束（与 `internal/domain` 模型一致）：
 

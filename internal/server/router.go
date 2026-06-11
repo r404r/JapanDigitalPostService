@@ -49,6 +49,9 @@ type Options struct {
 	// 鉴权与 token 管理。
 	Auth          Authorizer
 	TokenHandlers TokenHandlers
+
+	// 管理画面运行时设置（admin）。非空时装配 GET/PUT /v1/admin/settings。
+	Settings SettingsService
 }
 
 // NewRouter 装配完整 /v1 路由：health（公开）+ 地址查询读路径 + 同步状态/触发 +
@@ -72,6 +75,7 @@ func NewRouter(opts Options) http.Handler {
 		reader:       opts.AddressReader,
 		runs:         opts.SyncRuns,
 		trigger:      opts.SyncTrigger,
+		settings:     opts.Settings,
 		queryTimeout: timeout,
 		logger:       logger,
 	}
@@ -108,6 +112,12 @@ func NewRouter(opts Options) http.Handler {
 	}
 	if opts.SyncTrigger != nil {
 		mux.Handle("POST /v1/sync/trigger", admin(h.syncTrigger))
+	}
+
+	// 管理画面运行时设置：均要求 admin scope。仅在依赖注入时装配。
+	if opts.Settings != nil {
+		mux.Handle("GET /v1/admin/settings", admin(h.getSettings))
+		mux.Handle("PUT /v1/admin/settings", admin(h.putSettings))
 	}
 
 	// token 管理：均要求 admin scope。

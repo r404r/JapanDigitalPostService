@@ -116,6 +116,44 @@ paths:
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
+  /admin/settings:
+    get:
+      summary: 读取运行时抓取设置（admin）
+      operationId: getAdminSettings
+      description: >
+        返回管理画面可配置、重启后保留的运行时设置。每项含当前有效值 `value`、
+        默认值 `default`（“恢复默认”将回退到此），以及是否被 DB 覆盖 `overridden`。
+        有效值优先级 DB 覆盖 > env > 代码默认（见 docs/architecture.md §9.1）。
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminSettings' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+    put:
+      summary: 更新运行时抓取设置（admin）
+      operationId: updateAdminSettings
+      description: >
+        部分更新：省略的字段保持不变；列在 `reset_to_default` 中的键删除其覆盖值
+        以恢复默认（对应管理画面“恢复默认”按钮）。同一键不可同时设值与重置。
+        校验失败返回 400 `invalid_request`，`message` 为日语提示（URL 需 https 且
+        属日本邮便官方域名，重试次数 0–10）。返回应用后的完整设置视图。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminSettingsUpdate' }
+      responses:
+        '200':
+          description: 更新后的设置视图
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminSettings' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
   /tokens:
     get:
       summary: 列出 token（脱敏，admin scope）
@@ -255,6 +293,46 @@ components:
         finished_at: { type: string, format: date-time, nullable: true }
         duration_ms: { type: integer }
         error_message: { type: string, nullable: true }
+    AdminSettings:
+      type: object
+      description: >
+        运行时抓取设置视图。每项的 value/default 类型按键而定（重试为整数、URL 为字符串）。
+      required: [download_max_retry, scrape_full_url]
+      properties:
+        download_max_retry:
+          type: object
+          description: 抓取下载的额外重试次数（有效值 0–10）。
+          required: [value, default, overridden]
+          properties:
+            value: { type: integer, description: 当前有效值 }
+            default: { type: integer, description: 默认值（恢复默认将回退到此） }
+            overridden: { type: boolean, description: 是否存在 DB 覆盖 }
+        scrape_full_url:
+          type: object
+          description: 全量抓取数据源 URL（https + 日本邮便官方域名）。
+          required: [value, default, overridden]
+          properties:
+            value: { type: string }
+            default: { type: string }
+            overridden: { type: boolean }
+    AdminSettingsUpdate:
+      type: object
+      description: >
+        部分更新运行时设置。省略字段不变；reset_to_default 列出的键恢复默认。
+        同一键不可同时出现在设值字段与 reset_to_default 中。
+      properties:
+        download_max_retry:
+          type: integer
+          minimum: 0
+          maximum: 10
+          description: 设置重试次数覆盖值（0–10）。
+        scrape_full_url:
+          type: string
+          description: 设置全量 URL 覆盖值（必须 https 且属日本邮便官方域名）。
+        reset_to_default:
+          type: array
+          items: { type: string, enum: [download_max_retry, scrape_full_url] }
+          description: 恢复默认（删除覆盖值）的键列表。
     TokenInfo:
       type: object
       description: 脱敏的 token 元数据；绝不含明文或 hash。

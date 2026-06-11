@@ -1,4 +1,4 @@
-.PHONY: build run test test-multidialect db-up db-down lint tidy sync-soul gen web-install web-dev web-build web-test ci openapi-lint
+.PHONY: build run test test-multidialect db-up db-down lint tidy sync-soul gen web-install web-dev web-build web-test ci openapi-lint regression-report
 
 build:
 	go build -o bin/server ./cmd/server
@@ -62,3 +62,7 @@ openapi-lint:
 # 一键本地 CI：fmt/vet/build/test + 灵魂文件 + OpenAPI + 前端（若已落地）。
 ci:
 	./scripts/ci.sh
+
+# 回归测试 report：跑全量测试 + 覆盖率，写 output/regression-report.txt（纳入 git）。
+regression-report:
+	./scripts/regression-report.sh

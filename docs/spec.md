@@ -98,6 +98,22 @@
 
 明文 token 形如 `jdps_<43 字符 base64url>`（256-bit 随机熵）；落库只存 SHA-256 hash 与 8 字符 prefix。发行入参非法（缺 name、未知 scope、`ttl_seconds<=0`、未知字段、非法 JSON）返回 `400 invalid_request`。
 
+### 3.6 运行时抓取设置（admin scope，管理画面可配、重启后保留）
+
+管理画面可在线配置两项抓取行为，覆盖值持久化到 DB（`runtime_settings` 表），重启后保留：
+
+- `GET /v1/admin/settings` → 返回每项的 `value`（当前有效值）、`default`（默认值，恢复默认将回退到此）、`overridden`（是否存在 DB 覆盖）。
+- `PUT /v1/admin/settings` → 部分更新；省略字段不变。body `{ "download_max_retry": 5, "scrape_full_url": "https://…", "reset_to_default": ["scrape_full_url"] }`：列入 `reset_to_default` 的键删除其覆盖值（对应画面「恢复默认」按钮）。同一键不可同时设值与重置（返回 `400`）。
+
+配置项与生效规则：
+
+1. **`download_max_retry`**（抓取下载额外重试次数，默认 `3`，有效范围 `0–10`）。校验越界返回 `400 invalid_request`，日语提示「リトライ回数は 0 以上 10 以下の整数で指定してください。」。
+2. **`scrape_full_url`**（全量抓取数据源 URL，默认 = 当前配置的全量 URL）。校验覆盖 SSRF 风险：必须为 `https`、主机属日本邮便官方域名白名单（`www.post.japanpost.jp` / `post.japanpost.jp`）、不含用户名信息；否则返回 `400`，日语提示（如「URL のドメインは日本郵便の公式サイト（post.japanpost.jp）のみ許可されています。」）。
+
+**优先级**：有效值 = DB 覆盖 > env > 代码默认（详见 architecture §9.1）。
+
+**生效范围与重启后保留**：引擎在**每次同步运行前**解析有效配置（不在启动期冻结），因此管理画面改动无需重启即在三条触发路径生效——进程内调度（`SYNC_CRON`）、手动触发（`POST /v1/sync/trigger`）、独立批处理（`cmd/batch`）。覆盖值持久化于 DB，重启后保留。手工上传同期（WP2）走本地文件重建、不发起网络下载，故 `download_max_retry` / `scrape_full_url` 对上传路径不适用；上传与其它路径共用同一持久化与 applier。
+
 ## 4. 同步行为规格（task-0004 已实现）
 
 1. 调度：`cmd/server` 进程内 `robfig/cron` 按 `SYNC_CRON`（默认 `0 3 * * *`，每天 03:00）触发 `auto` 同步；可由 `SYNC_SCHEDULER_ENABLED=false` 关闭。server shutdown 时会取消在跑的调度同步并等待 job 退出。`cmd/batch --type auto|full|diff` 为独立入口，供外部调度器（K8s CronJob / 系统 cron）触发，与 server 共用同一引擎与 DB 锁。
@@ -112,7 +128,7 @@
    - **存量库迁移**：唯一索引 `uq_addr` 由 3 列扩为 4 列。GORM `AutoMigrate` 按索引**名**判断存在性、不比对列定义，故对已建过 3 列 `uq_addr` 的存量库不会自动重建——升级存量库需先手工 `DROP INDEX uq_addr` 再启动迁移，或直接清空 `addresses` 触发 auto-full 重建（推荐，邮编为可重导公开数据）。全新部署无需额外处理。
 6. 并发：DB 单行锁（`sync_locks`）保证同一时刻仅一个同步在写；并发触发返回 `sync_running`（HTTP 409）。锁含 TTL（2h），持有进程崩溃后可被抢占，避免永久阻塞；释放锁的 DB 操作使用 `SYNC_LOCK_RELEASE_TIMEOUT` 短超时。
 7. 失败：记录 `error_message`，分批写 + 删除走事务，不破坏既有数据，在线查询（读路径）不受影响。server/batch 启动时会把上个进程遗留的 `running` 记录标记为 `failed`，并写入 `finished_at` / `duration_ms` / 安全错误摘要。
-8. 健壮性：下载带单次超时 + 指数退避重试（`DOWNLOAD_*`）、大小校验、zip 完整性校验、记录 checksum/文件大小；DB 连接带超时 + 退避重试，并统一配置连接池限额（`DB_*`）。
+8. 健壮性：下载带单次超时 + 指数退避重试、大小校验、zip 完整性校验、记录 checksum/文件大小；DB 连接带超时 + 退避重试，并统一配置连接池限额（`DB_*`）。下载重试次数与全量 URL 由引擎**每次运行前**从有效配置解析（DB 覆盖 > env > 默认，见 §3.6 / architecture §9.1），管理画面改动无需重启即生效。
 9. 可扩展：引擎依赖 `domain` repository / `Locker` 接口，无状态，可作为独立 worker 多实例运行；后续替换为 worker/queue 或分布式锁（PG advisory lock）只需换 `Locker` 实现，不改引擎。
 
 ## 5. 认证规格
@@ -193,14 +209,14 @@
 | `STATIC_DIR` | — | 可选 React 生产构建目录；设置后 Go 服务托管非 `/v1` 路由并为前端路由 fallback 到 `index.html` |
 | `HTTP_READ_HEADER_TIMEOUT` / `HTTP_READ_TIMEOUT` / `HTTP_WRITE_TIMEOUT` / `HTTP_IDLE_TIMEOUT` | `5s` / `15s` / `30s` / `120s` | HTTP server 慢连接、读写与 keep-alive 超时 |
 | `SYNC_SCHEDULER_ENABLED` | `true` | server 进程内调度开关 |
-| `SYNC_FULL_URL` | 官网全量 zip | 全量数据源 |
+| `SYNC_FULL_URL` | 官网全量 zip | 全量数据源（基线默认；可被管理画面 `scrape_full_url` 的 DB 覆盖在线改写，见 §3.6） |
 | `SYNC_ADD_URL_TEMPLATE` / `SYNC_DEL_URL_TEMPLATE` | 官网 add/del（含 `%s`=YYMM） | 差分数据源模板 |
 | `SYNC_BATCH_SIZE` | `1000` | upsert 批大小 |
 | `SYNC_FULL_PRUNE` / `SYNC_FULL_MIN_ROWS` | `true` / `1000` | 全量剪枝开关 / 安全下限 |
 | `SYNC_DIFF_FALLBACK_FULL` | `true` | 差分窗口无文件时回退全量 |
 | `SYNC_DIFF_LOOKBACK_MONTHS` | `3` | 差分回看月份窗口（含当月） |
 | `SYNC_LOCK_RELEASE_TIMEOUT` | `5s` | 同步锁释放 DB 操作超时 |
-| `DOWNLOAD_TIMEOUT` / `DOWNLOAD_MAX_RETRY` / `DOWNLOAD_RETRY_BACKOFF` | `60s` / `3` / `1s` | 下载超时/重试/退避 |
+| `DOWNLOAD_TIMEOUT` / `DOWNLOAD_MAX_RETRY` / `DOWNLOAD_RETRY_BACKOFF` | `60s` / `3` / `1s` | 下载超时/重试/退避（`DOWNLOAD_MAX_RETRY` 为基线默认；可被管理画面 `download_max_retry` 的 DB 覆盖在线改写，见 §3.6） |
 | `DB_CONNECT_TIMEOUT` / `DB_MAX_RETRY` / `DB_RETRY_BACKOFF` | `5s` / `5` / `500ms` | DB 连接超时/重试/退避 |
 | `DB_MAX_OPEN_CONNS` / `DB_MAX_IDLE_CONNS` / `DB_CONN_MAX_LIFETIME` | SQLite: `1` / `1` / `0s`; PG/MySQL: `25` / `10` / `1h` | DB 连接池上限 / 空闲连接 / 连接生命周期 |
 
@@ -235,3 +251,4 @@
 | 2026-06-11 | task-0023 | 修复 Claude Review #8：cron scheduler 持有可取消 root context，`Stop()` 会取消在跑调度同步并等待 job 退出。无 OpenAPI 变更。 |
 | 2026-06-11 | task-0024 | 修复 Claude Review #9：`DeleteByKeys` 从单事务逐行 DELETE 改为跨方言可移植的分批批量 DELETE，降低大差分废止文件下的锁持有时间与 round-trip。无 OpenAPI 变更。 |
 | 2026-06-11 | task-0025 | 修复 Claude Review #10：`DeleteNotIn` 改为按 id 分页扫描与分批剪枝，避免长游标跨 DELETE 阶段，并减少一次性 stale id 内存占用。无 OpenAPI 变更。 |
+| 2026-06-12 | GHO-41 (WP1) | 新增运行时抓取设置持久化与管理 API：`runtime_settings` 表（三方言 GORM AutoMigrate + `migrations/0002_*`），`download_max_retry`（默认 3，0–10）与 `scrape_full_url`（默认=当前全量 URL，https+日本邮便域名白名单 SSRF 校验、日语提示）可在管理画面配置且重启后保留；新增 `GET/PUT /v1/admin/settings`（admin），「恢复默认」用删除覆盖语义。引擎/fetcher 改为每次同步前解析有效配置（DB>env>默认，§3.6 / architecture §9.1），batch/手动触发/调度三路径无需重启即生效；上传路径不发起下载、不受影响。OpenAPI 增补 `/admin/settings` 与 `AdminSettings`/`AdminSettingsUpdate` schema。 |

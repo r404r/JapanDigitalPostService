@@ -134,7 +134,7 @@ func defaultPoolOptions(driver string) (maxOpen int, maxIdle int, lifetime time.
 }
 
 func migrate(db *gorm.DB) error {
-	return db.AutoMigrate(&domain.Address{}, &domain.Token{}, &domain.SyncRun{}, &syncLockRow{})
+	return db.AutoMigrate(&domain.Address{}, &domain.Token{}, &domain.SyncRun{}, &domain.RuntimeSetting{}, &syncLockRow{})
 }
 
 // Addresses 返回地址 repository。
@@ -145,6 +145,9 @@ func (s *Store) Tokens() domain.TokenRepository { return &tokenRepo{db: s.db} }
 
 // SyncRuns 返回同步运行记录 repository。
 func (s *Store) SyncRuns() domain.SyncRunRepository { return &syncRunRepo{db: s.db} }
+
+// Settings 返回运行时配置覆盖值 repository（管理画面可配、重启后保留）。
+func (s *Store) Settings() domain.SettingsRepository { return &settingsRepo{db: s.db} }
 
 // Locker 返回同步互斥锁实现。
 func (s *Store) Locker() domain.Locker {

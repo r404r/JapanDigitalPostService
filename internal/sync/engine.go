@@ -26,6 +26,19 @@ type Options struct {
 	DiffLookbackMonths int    // 每次差分回看的月份窗口（含当月）
 }
 
+// SettingsResolver 解析每次同步运行前的有效配置（DB 覆盖 > env > 默认）。由
+// internal/settings.Service 实现并注入，使管理画面配置的全量 URL / 下载重试次数
+// 无需重启即可在 batch / 手动触发 / 上传等路径生效，避免启动期把配置冻死。
+type SettingsResolver interface {
+	ResolveSyncSettings(ctx context.Context) (domain.EffectiveSyncSettings, error)
+}
+
+// retryConfigurable 是 Fetcher 的可选能力：运行时可重置下载重试次数（HTTPFetcher
+// 实现）。引擎在每次运行前据有效配置注入；测试用的 fake fetcher 未实现，则不受影响。
+type retryConfigurable interface {
+	SetMaxRetry(n int)
+}
+
 // Engine 编排一次端到端同步：判定 full/diff → 下载 → 解析 → 幂等应用 →
 // 写 sync_runs → 并发锁保护。
 type Engine struct {
@@ -35,6 +48,10 @@ type Engine struct {
 	fetcher   Fetcher
 	opt       Options
 	logger    *slog.Logger
+
+	// resolver 可选；非空时在每次运行前解析有效配置（全量 URL / 下载重试），
+	// 为 nil 时回退到构造时的静态 opt / fetcher 默认值（测试与降级路径）。
+	resolver SettingsResolver
 
 	// now / newID 可注入，便于测试确定性。
 	now   func() time.Time
@@ -69,6 +86,13 @@ func NewEngine(addresses domain.AddressRepository, runs domain.SyncRunRepository
 		asyncCtx:    asyncCtx,
 		asyncCancel: asyncCancel,
 	}
+}
+
+// UseSettingsResolver 注入运行时配置解析器（管理画面可配的全量 URL / 下载重试）。
+// 注入后，引擎在每次同步运行前解析有效配置，无需重启即生效。返回 e 便于链式装配。
+func (e *Engine) UseSettingsResolver(r SettingsResolver) *Engine {
+	e.resolver = r
+	return e
 }
 
 // Run 执行一次同步（同步阻塞至完成）。reqType 为 auto/full/diff；trigger 区分
@@ -203,13 +227,16 @@ func (e *Engine) beginRun(ctx context.Context, syncType domain.SyncType, trigger
 func (e *Engine) execute(ctx context.Context, run *domain.SyncRun, syncType domain.SyncType, start time.Time) error {
 	e.logger.Info("sync started", "run_id", run.ID, "type", syncType, "trigger", run.Trigger)
 
+	// 每次运行前解析有效配置（DB 覆盖 > env > 默认），避免启动期把 URL / 重试冻死。
+	fullURL := e.resolveRuntime(ctx)
+
 	var res ApplyResult
 	var err error
 	switch syncType {
 	case domain.SyncFull:
-		res, err = e.runFull(ctx, run)
+		res, err = e.runFull(ctx, run, fullURL)
 	case domain.SyncDiff:
-		res, err = e.runDiff(ctx, run)
+		res, err = e.runDiff(ctx, run, fullURL)
 	default:
 		err = fmt.Errorf("unknown sync type %q", syncType)
 	}
@@ -245,8 +272,29 @@ func (e *Engine) execute(ctx context.Context, run *domain.SyncRun, syncType doma
 	return err
 }
 
-func (e *Engine) runFull(ctx context.Context, run *domain.SyncRun) (ApplyResult, error) {
-	src, err := e.fetcher.Fetch(ctx, e.opt.FullURL)
+// resolveRuntime 解析本次运行的有效全量 URL，并把有效下载重试次数注入 fetcher。
+// 无 resolver（测试/降级）或解析失败时，回退到构造时的静态配置，且不打断同步。
+func (e *Engine) resolveRuntime(ctx context.Context) (fullURL string) {
+	fullURL = e.opt.FullURL
+	if e.resolver == nil {
+		return fullURL
+	}
+	eff, err := e.resolver.ResolveSyncSettings(ctx)
+	if err != nil {
+		e.logger.Warn("resolve runtime settings failed; using static config", "err", err)
+		return fullURL
+	}
+	if eff.ScrapeFullURL != "" {
+		fullURL = eff.ScrapeFullURL
+	}
+	if rc, ok := e.fetcher.(retryConfigurable); ok {
+		rc.SetMaxRetry(eff.DownloadMaxRetry)
+	}
+	return fullURL
+}
+
+func (e *Engine) runFull(ctx context.Context, run *domain.SyncRun, fullURL string) (ApplyResult, error) {
+	src, err := e.fetcher.Fetch(ctx, fullURL)
 	if err != nil {
 		return ApplyResult{}, fmt.Errorf("download full: %w", err)
 	}
@@ -257,7 +305,7 @@ func (e *Engine) runFull(ctx context.Context, run *domain.SyncRun) (ApplyResult,
 	return ApplyFull(ctx, e.addresses, src.CSV, e.opt.BatchSize, e.opt.FullPrune, e.opt.FullMinRows)
 }
 
-func (e *Engine) runDiff(ctx context.Context, run *domain.SyncRun) (ApplyResult, error) {
+func (e *Engine) runDiff(ctx context.Context, run *domain.SyncRun, fullURL string) (ApplyResult, error) {
 	months := monthsWindow(e.now(), e.opt.DiffLookbackMonths)
 	var agg ApplyResult
 	applied := 0
@@ -314,7 +362,7 @@ func (e *Engine) runDiff(ctx context.Context, run *domain.SyncRun) (ApplyResult,
 		if e.opt.DiffFallbackFull {
 			e.logger.Warn("no diff available in window, falling back to full", "months", months)
 			run.Type = domain.SyncFull
-			return e.runFull(ctx, run)
+			return e.runFull(ctx, run, fullURL)
 		}
 		return agg, fmt.Errorf("no diff source available for months %v (fallback disabled)", months)
 	}
