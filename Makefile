@@ -57,7 +57,7 @@ sync-soul:
 
 # OpenAPI 契约校验（需 node/npx）。
 openapi-lint:
-	npx --yes @redocly/cli@latest lint api/openapi.yaml
+	npx --yes @redocly/cli@2.32.0 lint api/openapi.yaml
 
 # 一键本地 CI：fmt/vet/build/test + 灵魂文件 + OpenAPI + 前端（若已落地）。
 ci:

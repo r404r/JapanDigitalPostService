@@ -29,7 +29,7 @@ diff -q AGENTS.md CLAUDE.md
 
 step "OpenAPI 校验（api/openapi.yaml）"
 if command -v npx >/dev/null 2>&1; then
-	npx --yes @redocly/cli@latest lint api/openapi.yaml
+	npx --yes @redocly/cli@2.32.0 lint api/openapi.yaml
 else
 	echo "跳过：未找到 npx（CI 中由 openapi job 执行；本地装 node 后自动启用）"
 fi

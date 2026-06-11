@@ -74,6 +74,6 @@ jobs:
         with:
           node-version: "20"
       - name: openapi lint
-        run: npx --yes @redocly/cli@latest lint api/openapi.yaml
+        run: npx --yes @redocly/cli@2.32.0 lint api/openapi.yaml
 
   # web job 在 task-0009 接入 React 前端后启用。
