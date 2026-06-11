@@ -67,6 +67,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SyncStatus' }
+        '401': { $ref: '#/components/responses/Error' }
   /sync/runs:
     get:
       summary: 同步运行历史
@@ -82,6 +83,7 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/SyncRun' }
+        '401': { $ref: '#/components/responses/Error' }
   /sync/trigger:
     post:
       summary: 手动触发同步（admin）

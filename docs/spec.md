@@ -88,6 +88,8 @@
 - `GET /v1/sync/runs?limit=&offset=`：历史运行记录（`sync_runs`），含类型、状态、计数、耗时、错误。
 - `POST /v1/sync/trigger`（admin）：手动触发，body `{ "type": "full" | "diff" }`，返回 run id。
 
+> 实现现状：以上三端点的契约已在 `openapi.yaml` 就位，但尚未挂载到 `cmd/server`（属 task-0008-sync-status-api 范围）。同步本身已可用：进程内 cron（`SYNC_CRON`）与独立入口 `cmd/batch --type auto|full|diff` 均经引擎执行并写 `sync_runs`。手动触发/状态查看的 HTTP 端点待 task-0008 装配。
+
 ### 3.5 Token 管理（admin scope）
 - `POST /v1/tokens` body `{ "name": "...", "scope": "read|admin", "ttl_seconds": 86400 }` → `201`，**仅此一次**返回明文 `token`。`ttl_seconds` 可选（正整数）；省略则永不过期，置位则响应含 `expires_at`。
 - `GET /v1/tokens` → 列表（`id`、`name`、`prefix`、`scope`、`created_at`、`expires_at`、`last_used_at`、`revoked_at`；**不含明文/hash**）。
@@ -205,3 +207,4 @@
 | 2026-06-11 | GHO-33 (task-0004 review 收口) | 修复 review 三处缺陷：①差分窗口 `monthsWindow` 月末回退归一到月初，消除跳月/重复；②逻辑唯一键并入 `town_kana`（§2/§4 第 5 点），保留同键异读音、落库 124,511 条并消除同批 upsert 冲突，含存量库迁移说明；③同步锁 `release` 加 holder 校验，避免 TTL 抢占后误放他人锁。补单测覆盖三者；architecture §5.3 同步更新。 |
 | 2026-06-11 | GHO-34 (task-0002 多数据库移植) | 把 task-0002 的多方言存储能力整合进当前 main：`store.Open` 接入 PG/MySQL 驱动（保留连接超时/退避重试），Token 改用 GORM 持久化（替换内存 store，重启不丢）；新增 `domain.ErrConflict`（唯一冲突归一，§5/§7 引导 token 幂等收口）；`migrations/` 补三方言 `0001_init.*.sql`（4 列唯一键、`tokens.expires_at`、`sync_locks`）；新增 PG/MySQL 集成测试（`TEST_*_DSN`，§9）与 CI service 容器 job。方言适配：`town_kana` 收紧至 256 以满足 MySQL InnoDB 索引前缀上限；锁行 `acquired_at` 用纪元哨兵避免 MySQL 严格模式拒绝零值。 |
 | 2026-06-11 | task-0007 | 实现 React sample 查询、同步状态/历史、token 发行/管理页面与前端验证范围 |
+| 2026-06-11 | task-0010 (端到端收尾) | 收口复核 spec/openapi↔实现：§3.4 标注同步状态端点契约就位但待 task-0008 装配。新增端到端测试（同步 fixture→查询→token 鉴权）、可复用边界 fixture、一键脚本 `scripts/ci.sh`、CI OpenAPI 校验 job；openapi 为 `/sync/status`、`/sync/runs` 补 401。无行为变更。 |

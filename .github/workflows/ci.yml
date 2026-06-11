@@ -66,4 +66,14 @@ jobs:
       - name: store multidialect test
         run: go test -v ./internal/store/...
 
+  openapi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: openapi lint
+        run: npx --yes @redocly/cli@latest lint api/openapi.yaml
+
   # web job 在 task-0009 接入 React 前端后启用。
