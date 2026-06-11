@@ -229,13 +229,18 @@ func (e *Engine) holder() string {
 }
 
 // monthsWindow 返回从 (now - (n-1) 月) 到 now 的 YYMM 列表，按时间升序。
+//
+// 月份回退先归一到当月 1 日再做 AddDate：直接对 29–31 日做 AddDate(0,-i,0) 会因
+// 短月归一化跳月/重复（如 2026-03-31 回退 1 月得 03-03，漏掉 2602），归一到月初可
+// 规避所有月末与闰月边界问题。
 func monthsWindow(now time.Time, n int) []string {
 	if n <= 0 {
 		n = 1
 	}
+	first := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	out := make([]string, 0, n)
 	for i := n - 1; i >= 0; i-- {
-		m := now.AddDate(0, -i, 0)
+		m := first.AddDate(0, -i, 0)
 		out = append(out, fmt.Sprintf("%02d%02d", m.Year()%100, int(m.Month())))
 	}
 	return out

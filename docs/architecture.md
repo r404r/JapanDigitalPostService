@@ -135,7 +135,8 @@
    - 差分不可得或缺月时，回退为全量重建（可配置策略）。
 
 ### 5.3 幂等性
-- 解析每行计算 `source_hash`；upsert `ON CONFLICT(zipcode, jis_code, town) DO UPDATE`，hash 相同则跳过计数为"unchanged"。
+- 逻辑唯一键 `(zipcode, jis_code, town, town_kana)`：真实全量数据中同一 `(zipcode, jis_code, town)` 可有多种合法读音（实测 `6730012/28203/和坂`），`town_kana` 入键以保留各读音、避免确定性丢记录。
+- 解析每行计算 `source_hash`；upsert `ON CONFLICT(zipcode, jis_code, town, town_kana) DO UPDATE`，hash 相同则跳过计数为"unchanged"。
 - 同一文件重复执行结果一致（计数稳定），保证"重跑安全"。
 
 ### 5.4 健壮性

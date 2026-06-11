@@ -42,7 +42,7 @@ func (r *addressRepo) ExistingHashes(ctx context.Context, zipcodes []string) (ma
 		}
 		var rows []domain.Address
 		err := r.db.WithContext(ctx).
-			Select("zipcode", "jis_code", "town", "source_hash").
+			Select("zipcode", "jis_code", "town", "town_kana", "source_hash").
 			Where("zipcode IN ?", uniq[i:end]).
 			Find(&rows).Error
 		if err != nil {
@@ -60,9 +60,9 @@ func (r *addressRepo) UpsertBatch(ctx context.Context, addrs []domain.Address) e
 		return nil
 	}
 	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "zipcode"}, {Name: "jis_code"}, {Name: "town"}},
+		Columns: []clause.Column{{Name: "zipcode"}, {Name: "jis_code"}, {Name: "town"}, {Name: "town_kana"}},
 		DoUpdates: clause.AssignmentColumns([]string{
-			"prefecture", "prefecture_kana", "city", "city_kana", "town_kana",
+			"prefecture", "prefecture_kana", "city", "city_kana",
 			"flag_multi_zip", "flag_koaza", "flag_chome", "flag_multi_town",
 			"source_hash", "updated_at",
 		}),
@@ -76,7 +76,8 @@ func (r *addressRepo) DeleteByKeys(ctx context.Context, keys []domain.AddressKey
 	var total int64
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, k := range keys {
-			res := tx.Where("zipcode = ? AND jis_code = ? AND town = ?", k.Zipcode, k.JISCode, k.Town).
+			res := tx.Where("zipcode = ? AND jis_code = ? AND town = ? AND town_kana = ?",
+				k.Zipcode, k.JISCode, k.Town, k.TownKana).
 				Delete(&domain.Address{})
 			if res.Error != nil {
 				return res.Error
@@ -93,7 +94,7 @@ func (r *addressRepo) DeleteByKeys(ctx context.Context, keys []domain.AddressKey
 func (r *addressRepo) DeleteNotIn(ctx context.Context, keep map[domain.AddressKey]struct{}) (int64, error) {
 	var stale []uint
 	rows, err := r.db.WithContext(ctx).Model(&domain.Address{}).
-		Select("id", "zipcode", "jis_code", "town").Rows()
+		Select("id", "zipcode", "jis_code", "town", "town_kana").Rows()
 	if err != nil {
 		return 0, err
 	}

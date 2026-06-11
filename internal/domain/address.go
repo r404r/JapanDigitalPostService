@@ -21,7 +21,7 @@ type Address struct {
 	City           string    `gorm:"column:city;type:varchar(128);index"`
 	CityKana       string    `gorm:"column:city_kana;type:varchar(256)"`
 	Town           string    `gorm:"column:town;type:varchar(256);index;uniqueIndex:uq_addr,priority:3"`
-	TownKana       string    `gorm:"column:town_kana;type:varchar(512)"`
+	TownKana       string    `gorm:"column:town_kana;type:varchar(512);uniqueIndex:uq_addr,priority:4"`
 	FlagMultiZip   int       `gorm:"column:flag_multi_zip"`  // 一町域が二以上の郵便番号
 	FlagKoaza      int       `gorm:"column:flag_koaza"`      // 小字毎に番地が起番
 	FlagChome      int       `gorm:"column:flag_chome"`      // 丁目を有する町域
@@ -33,17 +33,21 @@ type Address struct {
 // TableName 固定表名，避免 GORM 复数化差异。
 func (Address) TableName() string { return "addresses" }
 
-// AddressKey 是地址在主表中的逻辑唯一键 (zipcode, jis_code, town)，
-// 对应 docs/architecture.md §5.3 的 ON CONFLICT 目标。
+// AddressKey 是地址在主表中的逻辑唯一键 (zipcode, jis_code, town, town_kana)，
+// 对应 docs/architecture.md §5.3 的 ON CONFLICT 目标。town_kana 是键的一部分：
+// 真实全量数据中存在同一 (zipcode, jis_code, town) 对应两种不同读音的合法记录
+// （实测 6730012/28203/和坂：カニガサカ vs ワサカ），不并入键会被唯一索引折叠、
+// 确定性丢一条；并入后两条读音各自独立、互不覆盖（决策见 docs/spec.md §2/§5.3）。
 type AddressKey struct {
-	Zipcode string
-	JISCode string
-	Town    string
+	Zipcode  string
+	JISCode  string
+	Town     string
+	TownKana string
 }
 
 // Key 返回该记录的逻辑唯一键。
 func (a Address) Key() AddressKey {
-	return AddressKey{Zipcode: a.Zipcode, JISCode: a.JISCode, Town: a.Town}
+	return AddressKey{Zipcode: a.Zipcode, JISCode: a.JISCode, Town: a.Town, TownKana: a.TownKana}
 }
 
 // ComputeHash 计算并写入 source_hash：对地址内容（不含更新区分/变更理由这类差分

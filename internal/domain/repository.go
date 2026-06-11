@@ -17,7 +17,7 @@ type AddressRepository interface {
 	// ExistingHashes 按 zipcode 批量取回已存在记录的 key→source_hash 映射，
 	// 供 applier 判定 added/updated/unchanged。
 	ExistingHashes(ctx context.Context, zipcodes []string) (map[AddressKey]string, error)
-	// UpsertBatch 按 (zipcode, jis_code, town) 冲突更新插入一批地址。
+	// UpsertBatch 按 (zipcode, jis_code, town, town_kana) 冲突更新插入一批地址。
 	UpsertBatch(ctx context.Context, addrs []Address) error
 	// DeleteByKeys 按逻辑键删除，返回删除行数。
 	DeleteByKeys(ctx context.Context, keys []AddressKey) (int64, error)
