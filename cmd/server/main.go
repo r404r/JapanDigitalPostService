@@ -1,7 +1,7 @@
 // Command server 启动 JapanDigitalPostService 的 HTTP API。
 //
-// 骨架阶段仅提供 GET /v1/health 与优雅关闭，证明工程基线可运行。
-// 业务路由（查询/同步/token）由 task-0005/0006/0008 在 internal/server 装配后接入。
+// 当前提供 GET /v1/health、优雅关闭，以及可选的进程内同步调度（task-0004）。
+// 业务路由（查询/同步状态/token）由 task-0005/0006/0008 在 internal/server 装配后接入。
 package main
 
 import (
@@ -15,13 +15,30 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/r404r/JapanDigitalPostService/internal/app"
 	"github.com/r404r/JapanDigitalPostService/internal/config"
+	syncpkg "github.com/r404r/JapanDigitalPostService/internal/sync"
 	"github.com/r404r/JapanDigitalPostService/internal/version"
 )
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	cfg := config.Load()
+
+	// 可选的进程内同步调度：开启时按 SYNC_CRON 周期触发 auto 同步。DB 初始化失败
+	// 不阻断健康检查（读写解耦），仅记录并跳过调度。
+	if cfg.SyncSchedulerOn {
+		if a, err := app.BuildSync(context.Background(), cfg, logger); err != nil {
+			logger.Error("sync scheduler disabled: build failed", "err", err)
+		} else if sch, err := syncpkg.NewScheduler(a.Engine, cfg.SyncCron, logger); err != nil {
+			logger.Error("sync scheduler disabled: bad SYNC_CRON", "spec", cfg.SyncCron, "err", err)
+			_ = a.Close()
+		} else {
+			sch.Start()
+			logger.Info("sync scheduler started", "spec", cfg.SyncCron)
+			defer func() { <-sch.Stop().Done(); _ = a.Close() }()
+		}
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/health", func(w http.ResponseWriter, r *http.Request) {

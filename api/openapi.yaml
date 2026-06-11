@@ -199,12 +199,17 @@ components:
         type: { type: string, enum: [full, diff] }
         status: { type: string, enum: [running, success, failed] }
         trigger: { type: string, enum: [schedule, manual] }
+        source_url: { type: string, description: 下载来源 URL }
+        file_checksum: { type: string, description: 下载 zip 的 SHA-256 }
+        file_size: { type: integer, description: 下载 zip 字节数 }
+        diff_period: { type: string, nullable: true, description: 差分目标月份 YYMM（diff 专用） }
         rows_added: { type: integer }
         rows_updated: { type: integer }
         rows_deleted: { type: integer }
         rows_total: { type: integer }
         started_at: { type: string, format: date-time }
         finished_at: { type: string, format: date-time, nullable: true }
+        duration_ms: { type: integer }
         error_message: { type: string, nullable: true }
     TokenInfo:
       type: object
