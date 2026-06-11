@@ -143,7 +143,7 @@ func (s *Service) EnsureBootstrap(ctx context.Context, plaintext string) error {
 	if err != nil {
 		return err
 	}
-	return s.repo.Create(ctx, &domain.Token{
+	err = s.repo.Create(ctx, &domain.Token{
 		ID:        id,
 		Name:      "bootstrap",
 		Prefix:    prefixOf(plaintext),
@@ -151,4 +151,11 @@ func (s *Service) EnsureBootstrap(ctx context.Context, plaintext string) error {
 		Scope:     domain.ScopeAdmin,
 		CreatedAt: s.now(),
 	})
+	// 唯一冲突（token_hash 已存在）说明引导 token 已由先前/并发启动写入：与 GetByHash
+	// 命中等价，幂等跳过。持久化 store 下 GetByHash 与 Create 之间存在竞态窗口，靠
+	// 类型化的 ErrConflict 收口而非依赖具体方言错误（见 GHO-25 review 第 5 条）。
+	if errors.Is(err, domain.ErrConflict) {
+		return nil
+	}
+	return err
 }

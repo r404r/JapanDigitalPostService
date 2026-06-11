@@ -13,21 +13,25 @@ import (
 // 元数据，不入主表（见 Applier 按文件类型 add/del 处理），以保证全量与差分导入同一
 // 地址时 source_hash 一致、可幂等重跑。
 type Address struct {
-	ID             uint      `gorm:"primaryKey"`
-	Zipcode        string    `gorm:"column:zipcode;type:varchar(7);index;uniqueIndex:uq_addr,priority:1"`
-	JISCode        string    `gorm:"column:jis_code;type:varchar(5);uniqueIndex:uq_addr,priority:2"`
-	Prefecture     string    `gorm:"column:prefecture;type:varchar(64);index"`
-	PrefectureKana string    `gorm:"column:prefecture_kana;type:varchar(128)"`
-	City           string    `gorm:"column:city;type:varchar(128);index"`
-	CityKana       string    `gorm:"column:city_kana;type:varchar(256)"`
-	Town           string    `gorm:"column:town;type:varchar(256);index;uniqueIndex:uq_addr,priority:3"`
-	TownKana       string    `gorm:"column:town_kana;type:varchar(512);uniqueIndex:uq_addr,priority:4"`
-	FlagMultiZip   int       `gorm:"column:flag_multi_zip"`  // 一町域が二以上の郵便番号
-	FlagKoaza      int       `gorm:"column:flag_koaza"`      // 小字毎に番地が起番
-	FlagChome      int       `gorm:"column:flag_chome"`      // 丁目を有する町域
-	FlagMultiTown  int       `gorm:"column:flag_multi_town"` // 一つの郵便番号で二以上の町域
-	SourceHash     string    `gorm:"column:source_hash;type:varchar(64)"`
-	UpdatedAt      time.Time `gorm:"column:updated_at"`
+	ID             uint   `gorm:"primaryKey"`
+	Zipcode        string `gorm:"column:zipcode;type:varchar(7);index;uniqueIndex:uq_addr,priority:1"`
+	JISCode        string `gorm:"column:jis_code;type:varchar(5);uniqueIndex:uq_addr,priority:2"`
+	Prefecture     string `gorm:"column:prefecture;type:varchar(64);index"`
+	PrefectureKana string `gorm:"column:prefecture_kana;type:varchar(128)"`
+	City           string `gorm:"column:city;type:varchar(128);index"`
+	CityKana       string `gorm:"column:city_kana;type:varchar(256)"`
+	Town           string `gorm:"column:town;type:varchar(256);index;uniqueIndex:uq_addr,priority:3"`
+	// town_kana 限 256：它与 zipcode/jis_code/town 同处 4 列唯一索引 uq_addr，
+	// MySQL InnoDB 单索引前缀上限为 3072 字节，utf8mb4 下 7+5+256+512 列长 ×4
+	// = 3120 字节会超限导致 AutoMigrate 失败。256 对全角カナ读音绰绰有余（实测
+	// 最长读音 < 40 字符），且 SQLite 动态类型/PG 上限更宽，收紧此值不影响三者数据。
+	TownKana      string    `gorm:"column:town_kana;type:varchar(256);uniqueIndex:uq_addr,priority:4"`
+	FlagMultiZip  int       `gorm:"column:flag_multi_zip"`  // 一町域が二以上の郵便番号
+	FlagKoaza     int       `gorm:"column:flag_koaza"`      // 小字毎に番地が起番
+	FlagChome     int       `gorm:"column:flag_chome"`      // 丁目を有する町域
+	FlagMultiTown int       `gorm:"column:flag_multi_town"` // 一つの郵便番号で二以上の町域
+	SourceHash    string    `gorm:"column:source_hash;type:varchar(64)"`
+	UpdatedAt     time.Time `gorm:"column:updated_at"`
 }
 
 // TableName 固定表名，避免 GORM 复数化差异。

@@ -23,4 +23,47 @@ jobs:
       - name: soul files in sync
         run: diff -q AGENTS.md CLAUDE.md
 
+  # 多方言回归：在 PostgreSQL / MySQL service 容器上跑 store 集成测试。
+  # SQLite 路径已在上面的 go job 常态覆盖；本 job 让 PG/MySQL 不再依赖人工 docker-compose。
+  store-multidialect:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postal
+          POSTGRES_PASSWORD: postal
+          POSTGRES_DB: postal
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postal"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: postal
+          MYSQL_USER: postal
+          MYSQL_PASSWORD: postal
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      TEST_POSTGRES_DSN: "postgres://postal:postal@localhost:5432/postal?sslmode=disable"
+      TEST_MYSQL_DSN: "postal:postal@tcp(localhost:3306)/postal?parseTime=true&charset=utf8mb4"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - name: store multidialect test
+        run: go test -v ./internal/store/...
+
   # web job 在 task-0009 接入 React 前端后启用。

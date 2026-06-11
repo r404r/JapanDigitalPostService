@@ -88,9 +88,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 认证服务。当前用进程内 token 仓储（默认实现），待 task-0002 的 GORM
-	// store 落地同一 domain.TokenRepository 接口后替换。
-	authSvc := auth.NewService(auth.NewMemoryStore(), time.Now)
+	// 认证服务用持久化 token 仓储（task-0002 GORM store，GHO-34 接入）：进程重启后
+	// token 不再丢失。EnsureBootstrap 仍按 hash 幂等注入引导 token。
+	authSvc := auth.NewService(st.Tokens(), time.Now)
 	if err := authSvc.EnsureBootstrap(context.Background(), cfg.AdminBootstrapToken); err != nil {
 		logger.Error("bootstrap admin token", "err", err)
 		os.Exit(1)

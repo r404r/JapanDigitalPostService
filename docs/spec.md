@@ -165,7 +165,7 @@
 ## 9. 测试规格（可复用）
 
 - 单元：parser（用小 fixture CSV）、query service（limit/total/timeout）、auth（hash/scope）、applier（幂等/差分）。
-- 集成：repository 跑 SQLite 内存库；CI 矩阵可加 PG/MySQL（docker-compose）。
+- 集成：repository 跑 SQLite 内存库（常态）；PG/MySQL 由 `deployments/docker-compose.yml` 起库，测试经 `TEST_POSTGRES_DSN` / `TEST_MYSQL_DSN` 注入 DSN（未设置则跳过）。本地一键 `make test-multidialect`；CI `store-multidialect` job 用 PG/MySQL service 容器常态回归。
 - 契约：OpenAPI 校验请求/响应。
 - 端到端：health → 发行 token → 触发同步（小 fixture）→ 查询命中。
 
@@ -196,3 +196,4 @@
 | 2026-06-11 | task-0006 | §3.5 token 增加 `ttl_seconds`/`expires_at` 与发行校验；§5 认证补充过期校验、401 不区分、安全错误约束、§5.1 认证边界表；§6 传输加密细化信封/密钥/错误处理/不适用场景。实现：`internal/domain`(Token+Repository)、`internal/auth`(service/中间件/管理端点/内存仓储)、`internal/crypto`(AES-256-GCM + 响应中间件)。 |
 | 2026-06-11 | merge | task-0004/0005/0006 合流：查询读路径改跑在 GORM 统一 schema 上（移除独立建表）；读接口更名 `domain.AddressReader`（同步写接口仍为 `AddressRepository`）；`SEED_SAMPLE_DATA` 默认改为 `false`（同步引擎已就位，避免示例数据使 auto 同步误判为 diff）。查询端点 Bearer 校验仍为占位，待装配 task 接入。 |
 | 2026-06-11 | GHO-33 (task-0004 review 收口) | 修复 review 三处缺陷：①差分窗口 `monthsWindow` 月末回退归一到月初，消除跳月/重复；②逻辑唯一键并入 `town_kana`（§2/§4 第 5 点），保留同键异读音、落库 124,511 条并消除同批 upsert 冲突，含存量库迁移说明；③同步锁 `release` 加 holder 校验，避免 TTL 抢占后误放他人锁。补单测覆盖三者；architecture §5.3 同步更新。 |
+| 2026-06-11 | GHO-34 (task-0002 多数据库移植) | 把 task-0002 的多方言存储能力整合进当前 main：`store.Open` 接入 PG/MySQL 驱动（保留连接超时/退避重试），Token 改用 GORM 持久化（替换内存 store，重启不丢）；新增 `domain.ErrConflict`（唯一冲突归一，§5/§7 引导 token 幂等收口）；`migrations/` 补三方言 `0001_init.*.sql`（4 列唯一键、`tokens.expires_at`、`sync_locks`）；新增 PG/MySQL 集成测试（`TEST_*_DSN`，§9）与 CI service 容器 job。方言适配：`town_kana` 收紧至 256 以满足 MySQL InnoDB 索引前缀上限；锁行 `acquired_at` 用纪元哨兵避免 MySQL 严格模式拒绝零值。 |

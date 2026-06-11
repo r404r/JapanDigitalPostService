@@ -9,6 +9,10 @@ import (
 // sync_running / HTTP 409）。
 var ErrSyncRunning = errors.New("sync already running")
 
+// ErrConflict 表示写入违反了唯一约束（如 token_hash 已存在）。store 实现把各方言
+// 的唯一冲突归一为该错误，业务层据此区分"已存在"与其它失败，而不依赖具体方言错误码。
+var ErrConflict = errors.New("unique constraint conflict")
+
 // AddressRepository 提供同步引擎所需的地址持久化原语。业务层只依赖本接口，
 // 不依赖 GORM；查询语义（task-0005）在此之上另行实现。
 type AddressRepository interface {

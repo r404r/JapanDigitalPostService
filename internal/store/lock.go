@@ -30,9 +30,11 @@ type dbLocker struct{ db *gorm.DB }
 // Acquire 通过条件 UPDATE 原子抢锁：仅当未锁定或锁已陈旧时成功。SQLite 单写者
 // 保证原子性；PG/MySQL 下条件 UPDATE 的 RowsAffected 同样可靠。
 func (l *dbLocker) Acquire(ctx context.Context, holder string) (func() error, bool, error) {
-	// 确保锁行存在（首次运行）。
+	// 确保锁行存在（首次运行）。AcquiredAt 给一个有效的纪元哨兵而非 Go 零值
+	// （0001-01-01）：MySQL DATETIME 严格模式会拒绝零值/'0000-00-00'。locked=false
+	// 时该时间不参与判定，仅需是合法的过去时刻。
 	if err := l.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).
-		Create(&syncLockRow{ID: lockID, Locked: false}).Error; err != nil {
+		Create(&syncLockRow{ID: lockID, Locked: false, AcquiredAt: time.Unix(0, 0).UTC()}).Error; err != nil {
 		return nil, false, err
 	}
 

@@ -73,7 +73,7 @@
 | 日志 | `log/slog`（标准库） | 结构化日志，无额外依赖。 |
 | 测试 | `testing` + `testify` + SQLite 内存库 | 可复用、CI 友好、无需外部 DB。 |
 
-> 说明：当前提交的仓库骨架仅依赖标准库（`net/http`）以保证离线可编译；上表依赖在 `task-0001`/`task-0002` 引入并写入 `go.mod`。
+> 说明：当前提交的仓库骨架仅依赖标准库（`net/http`）以保证离线可编译；上表依赖在 `task-0001`/`task-0002` 引入并写入 `go.mod`。GORM 三方言驱动（`gorm.io/driver/postgres`、`gorm.io/driver/mysql`、纯 Go 的 `glebarez/sqlite`）已接入 `store.Open` 的方言分支（GHO-34）；`store.Open` 用 `TranslateError` 把各方言唯一冲突归一为 `gorm.ErrDuplicatedKey`，再映射为 `domain.ErrConflict`，业务层不感知方言错误码。
 
 ## 4. 数据模型
 
@@ -162,7 +162,7 @@
 - 数据端点：`Authorization: Bearer <token>`，中间件校验 `token_hash`、未吊销、未过期，并按 scope 放行（admin 隐含 read）。
 - Token 仅在创建时返回一次明文；DB 只存 hash + prefix。可选 `expires_at`（发行时由 `ttl_seconds` 计算）。
 - 认证/授权错误统一为 `{status, message}`，401 不区分原因，绝不回显 token/hash/栈/配置。
-- 业务逻辑只依赖 `domain.TokenRepository`：当前默认实现为进程内 `auth.MemoryStore`，task-0002 的 GORM store 落地同一接口后替换，HTTP/service 层不变。
+- 业务逻辑只依赖 `domain.TokenRepository`：`cmd/server` 装配的是 `internal/store` 的 GORM 持久化实现（三方言），进程重启后 token 不丢失；`auth.MemoryStore` 保留为默认/测试夹具。唯一冲突（`token_hash` 已存在）由 store 归一为 `domain.ErrConflict`，引导 token 注入据此幂等收口（GHO-34 / GHO-25 review 第 5 条）。
 - 管理端点（admin scope）：`POST /v1/tokens` 发行、`GET /v1/tokens` 列表（脱敏）、`DELETE /v1/tokens/{id}` 吊销。
 - **引导**：首个 admin token 通过环境变量 `ADMIN_BOOTSTRAP_TOKEN` 注入（或启动时生成并打印一次），用于发行后续 token。
 - 前端提供 token 发行页面（需 admin token）。

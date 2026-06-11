@@ -38,17 +38,25 @@ var ErrTokenNotFound = errors.New("token not found")
 //
 // 该实体由 internal/store（task-0002，GORM 三方言）持久化；本包只定义形状
 // 与 repository 契约，业务逻辑（internal/auth）只依赖接口。
+//
+// gorm 标签仅是结构体 tag（不引入 ORM 依赖），与 Address/SyncRun 同一约定：
+// 列类型显式声明长度，保证三方言 AutoMigrate 生成一致；token_hash 上的唯一索引
+// 让"同一明文只存一条"由 DB 保证（重复 Create 经 TranslateError 归一为
+// gorm.ErrDuplicatedKey，store 再映射为 [ErrConflict]）。
 type Token struct {
-	ID         string     // UUID
-	Name       string     // 人类可读名称
-	Prefix     string     // 明文 token 的前缀（不可反推完整 token）
-	Hash       string     // 明文 token 的 SHA-256（hex）；不存明文
-	Scope      Scope      // read | admin
-	CreatedAt  time.Time  //
-	ExpiresAt  *time.Time // nil = 永不过期
-	LastUsedAt *time.Time // nil = 从未使用
-	RevokedAt  *time.Time // nil = 未吊销
+	ID         string     `gorm:"primaryKey;type:varchar(36)"`                                         // UUID
+	Name       string     `gorm:"column:name;type:varchar(128)"`                                       // 人类可读名称
+	Prefix     string     `gorm:"column:prefix;type:varchar(16)"`                                      // 明文 token 的前缀（不可反推完整 token）
+	Hash       string     `gorm:"column:token_hash;type:varchar(64);uniqueIndex:uq_tokens_token_hash"` // 明文 token 的 SHA-256（hex）；不存明文
+	Scope      Scope      `gorm:"column:scope;type:varchar(16)"`                                       // read | admin
+	CreatedAt  time.Time  `gorm:"column:created_at"`                                                   //
+	ExpiresAt  *time.Time `gorm:"column:expires_at"`                                                   // nil = 永不过期
+	LastUsedAt *time.Time `gorm:"column:last_used_at"`                                                 // nil = 从未使用
+	RevokedAt  *time.Time `gorm:"column:revoked_at"`                                                   // nil = 未吊销
 }
+
+// TableName 固定表名，避免 GORM 复数化差异。
+func (Token) TableName() string { return "tokens" }
 
 // Active 报告 token 在 now 时刻是否可用于认证：未吊销且未过期。
 func (t *Token) Active(now time.Time) bool {

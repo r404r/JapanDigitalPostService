@@ -1,4 +1,4 @@
-.PHONY: build run test lint tidy sync-soul gen
+.PHONY: build run test test-multidialect db-up db-down lint tidy sync-soul gen
 
 build:
 	go build -o bin/server ./cmd/server
@@ -9,6 +9,24 @@ run:
 
 test:
 	go test ./...
+
+# 本地一键多方言测试：起 PG/MySQL，等就绪，跑 store 集成测试。
+# 需要 docker。CI 用 service 容器跑同一组测试（.github/workflows/ci.yml）。
+DC := docker compose -f deployments/docker-compose.yml
+TEST_POSTGRES_DSN ?= postgres://postal:postal@localhost:5432/postal?sslmode=disable
+TEST_MYSQL_DSN    ?= postal:postal@tcp(localhost:3306)/postal?parseTime=true&charset=utf8mb4
+
+db-up:
+	$(DC) up -d
+	@echo "waiting for postgres..."; until $(DC) exec -T postgres pg_isready -U postal >/dev/null 2>&1; do sleep 1; done
+	@echo "waiting for mysql...";    until $(DC) exec -T mysql mysqladmin ping -uroot -proot >/dev/null 2>&1; do sleep 1; done
+	@echo "databases ready"
+
+db-down:
+	$(DC) down -v
+
+test-multidialect: db-up
+	TEST_POSTGRES_DSN="$(TEST_POSTGRES_DSN)" TEST_MYSQL_DSN="$(TEST_MYSQL_DSN)" go test -v ./internal/store/...
 
 lint:
 	gofmt -l .

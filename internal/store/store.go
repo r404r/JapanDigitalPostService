@@ -1,7 +1,7 @@
 // Package store 用 GORM 实现 domain 的 repository 接口，并负责连接超时与重试。
 //
 // 本 task（0004）为同步引擎落地了 SQLite（纯 Go 驱动，无 cgo）后端及迁移；
-// PostgreSQL / MySQL 方言由 task-0002 接入（见 Open 的占位分支）。
+// PostgreSQL / MySQL 方言由 task-0002（GHO-34 移植）接入 Open 的方言分支。
 package store
 
 import (
@@ -11,6 +11,8 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"github.com/r404r/JapanDigitalPostService/internal/domain"
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -68,14 +70,20 @@ func Open(ctx context.Context, opt Options) (*Store, error) {
 }
 
 func open(opt Options) (*gorm.DB, error) {
-	cfg := &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)}
+	// TranslateError 让 gorm 把各方言的驱动错误归一为 gorm 通用错误
+	// （如唯一冲突 → gorm.ErrDuplicatedKey），token_repo 据此返回 domain.ErrConflict，
+	// 不必按方言匹配错误码字符串。
+	cfg := &gorm.Config{
+		Logger:         logger.Default.LogMode(logger.Silent),
+		TranslateError: true,
+	}
 	switch opt.Driver {
 	case "sqlite", "":
 		return gorm.Open(sqlite.Open(opt.DSN), cfg)
-	case "postgres", "mysql":
-		// task-0002 负责接入 PG/MySQL 方言驱动；同步引擎与 repository 接口已就绪，
-		// 仅需在此返回对应 gorm driver。
-		return nil, fmt.Errorf("driver %q not wired yet (see task-0002)", opt.Driver)
+	case "postgres":
+		return gorm.Open(postgres.Open(opt.DSN), cfg)
+	case "mysql":
+		return gorm.Open(mysql.Open(opt.DSN), cfg)
 	default:
 		return nil, fmt.Errorf("unknown DB_DRIVER %q", opt.Driver)
 	}
@@ -92,11 +100,14 @@ func ping(ctx context.Context, db *gorm.DB, timeout time.Duration) error {
 }
 
 func migrate(db *gorm.DB) error {
-	return db.AutoMigrate(&domain.Address{}, &domain.SyncRun{}, &syncLockRow{})
+	return db.AutoMigrate(&domain.Address{}, &domain.Token{}, &domain.SyncRun{}, &syncLockRow{})
 }
 
 // Addresses 返回地址 repository。
 func (s *Store) Addresses() domain.AddressRepository { return &addressRepo{db: s.db} }
+
+// Tokens 返回 token repository（持久化 domain.TokenRepository，替换内存实现）。
+func (s *Store) Tokens() domain.TokenRepository { return &tokenRepo{db: s.db} }
 
 // SyncRuns 返回同步运行记录 repository。
 func (s *Store) SyncRuns() domain.SyncRunRepository { return &syncRunRepo{db: s.db} }
