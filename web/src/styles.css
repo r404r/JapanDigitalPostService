@@ -1,8 +1,9 @@
 :root {
   color: #052f45;
   background: #eaf5f8;
-  font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", "Noto Sans JP", Meiryo, system-ui, sans-serif;
+  font-family: var(--font-jp);
   line-height: 1.5;
+  --font-jp: "Noto Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", Meiryo, sans-serif;
   --page-bg: #eaf5f8;
   --ink: #052f45;
   --muted: #496b7b;
@@ -23,6 +24,9 @@ body {
   margin: 0;
   min-width: 320px;
   background: var(--page-bg);
+  font-family: var(--font-jp);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 button,
@@ -246,6 +250,83 @@ h3 {
   align-items: center;
 }
 
+.secondary-button {
+  color: var(--cta);
+  background: #ffffff;
+}
+
+.secondary-button:hover:not(:disabled) {
+  color: #ffffff;
+}
+
+.sync-control-panel {
+  display: grid;
+  gap: 20px;
+}
+
+.sync-controls {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.82fr) minmax(360px, 1.18fr);
+  gap: 26px;
+  align-items: start;
+}
+
+.sync-control {
+  display: grid;
+  min-width: 0;
+  gap: 14px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(5, 47, 69, 0.16);
+}
+
+.sync-control + .sync-control {
+  border-left: 1px solid rgba(5, 47, 69, 0.14);
+  padding-left: 26px;
+}
+
+.sync-control h3 {
+  margin-bottom: 6px;
+  font-size: 1.08rem;
+}
+
+.sync-control p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.sync-control .secondary-button {
+  justify-self: start;
+}
+
+.sync-mode-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.sync-mode-field {
+  min-width: 0;
+}
+
+.sync-mode-field span {
+  margin-bottom: 8px;
+  font-size: 0.98rem;
+}
+
+.sync-mode-field select {
+  min-height: 56px;
+}
+
+.sync-submit-button {
+  min-width: 228px;
+}
+
+.field-note {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
 .search-form .actions {
   justify-content: center;
   padding-top: 18px;
@@ -423,6 +504,21 @@ th {
   input,
   select {
     min-height: 56px;
+  }
+
+  .sync-controls,
+  .sync-mode-row {
+    grid-template-columns: 1fr;
+  }
+
+  .sync-control + .sync-control {
+    border-left: 0;
+    padding-left: 0;
+  }
+
+  .sync-submit-button {
+    width: 100%;
+    min-width: 0;
   }
 
   .search-form .actions button[type="submit"] {

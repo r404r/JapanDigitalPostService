@@ -161,11 +161,11 @@
 
 `web/` 提供 Vite + React + TypeScript sample。后端默认在 `localhost:8080`，开发服务器通过 `/v1` 代理访问 API。
 生产构建产物可通过 `STATIC_DIR` 由 Go 服务托管；此时前端同源调用 `/v1`，无需单独配置 API base。
-视觉风格参考日本邮便番号検索表单：淡蓝背景、深海军蓝标题与主按钮、大尺寸输入框、清晰深色边框、红色描边错误提示。
+视觉风格参考日本邮便番号検索表单：淡蓝背景、深海军蓝标题与主按钮、大尺寸输入框、清晰深色边框、红色描边错误提示。字体采用日文显示友好的本机字体栈，优先使用 `Noto Sans JP` / `Hiragino Sans` / `Yu Gothic UI` / `Yu Gothic` / `Meiryo`，不依赖外部 webfont。
 
 三个页面（最小可用）：
 1. **查询页**：输入邮编/都道府県/市区町村/关键字，展示结果表、OpenAPI 字段 `total_count` / `returned_count` / `items`，并可展示 `items.length` 作为本次返回地址数量；同时展示 `truncated`/`too_many_results`/`timeout` 状态提示。
-2. **同步状态页**：持有 Bearer token 时自动读取同步状态与运行历史；展示 `total_addresses`、最近成功同步时间/类型、是否运行中、最新 100 件运行历史（类型、状态、时间、`rows_total` 处理数量、错误摘要），可手动触发 full/diff（admin）。清空 token 时同步状态与历史显示应一并清空，避免保留旧 token 读取到的信息。
+2. **同步状态页**：持有 Bearer token 时自动读取同步状态与运行历史；展示 `total_addresses`、最近成功同步时间/类型、是否运行中、最新 100 件运行历史（类型、状态、时间、`rows_total` 处理数量、错误摘要），可手动触发 auto/full/diff（admin）。清空 token 时同步状态与历史显示应一并清空，避免保留旧 token 读取到的信息。管理区 UI 将“状态再読込”和“同期実行”分成两个操作区域；`同期方式` 下拉框只影响其同组的「選択した方式で同期実行」按钮，状态再读取不受该选择影响。
 3. **Token 页**：发行 token（明文仅展示一次并提示保存）、脱敏列表、吊销（需 admin）。
 
 通用行为：
@@ -216,3 +216,4 @@
 | 2026-06-11 | GHO-38 (全功能手工测试容器) | §8/§10 增加 `STATIC_DIR` 生产前端托管；新增 `deployments/manual-test.Dockerfile`、`deployments/manual-test.compose.yml`、`deployments/manual-test.env`，一条 compose 命令启动后端+画面+内置 PG/MySQL，数据库通过 env 文件在 sqlite/postgres/mysql 间切换。 |
 | 2026-06-11 | task-0011 | React sample 管理页持有 token 时自动读取 `sync/status` 与最新 100 件 `sync/runs`，刷新/重新进入后从后端持久化 `sync_runs` 恢复同期履歴；清空 token 时清空同步状态与历史显示。无 OpenAPI 变更。 |
 | 2026-06-11 | task-0012 | 补充 `node_modules` 类目录 ignore、README 手工测试容器按最新代码重建 app 的步骤，并将 React sample 视觉调整为日本邮便番号検索风格。无 OpenAPI 变更。 |
+| 2026-06-11 | task-0013 | React sample 改用日文字体优先的本机字体栈，并将管理页同期操作拆成“状态再読込”和“選択した方式で同期実行”两个明确区域，消除下拉框适用范围歧义。无 OpenAPI 变更。 |

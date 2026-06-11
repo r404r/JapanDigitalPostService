@@ -202,28 +202,49 @@ function SyncPanel({ api, hasToken }: { api: ApiClient; hasToken: boolean }) {
 
   return (
     <section className="admin-section">
-      <section className="panel">
+      <section className="panel sync-control-panel">
         <div className="section-heading">
           <h2>同期管理</h2>
-          <p>郵便番号データの同期を起動し、running 状態と履歴を確認します。</p>
+          <p>状態確認と手動同期を分けて操作できます。</p>
+        </div>
+        <div className="sync-controls">
+          <section className="sync-control" aria-labelledby="sync-refresh-title">
+            <div>
+              <h3 id="sync-refresh-title">状態を更新</h3>
+              <p>現在の状態と最新 100 件の履歴だけを再取得します。</p>
+            </div>
+            <button className="secondary-button" type="button" onClick={load} disabled={loading || !hasToken}>
+              {loading ? "読込中" : "状態を再読込"}
+            </button>
+          </section>
+
+          <section className="sync-control sync-control-primary" aria-labelledby="sync-trigger-title">
+            <div>
+              <h3 id="sync-trigger-title">同期を開始</h3>
+              <p>方式を選択してから同期を実行します。</p>
+            </div>
+            <div className="sync-mode-row">
+              <label className="sync-mode-field">
+                <span>同期方式</span>
+                <select
+                  value={triggerType}
+                  onChange={(event) => setTriggerType(event.target.value as SyncType)}
+                  disabled={loading || !hasToken}
+                >
+                  <option value="auto">auto（自動判定）</option>
+                  <option value="diff">diff（差分）</option>
+                  <option value="full">full（全量）</option>
+                </select>
+              </label>
+              <button className="sync-submit-button" type="button" onClick={trigger} disabled={loading || !hasToken}>
+                選択した方式で同期実行
+              </button>
+            </div>
+            <p className="field-note">下のボタンは選択した方式で同期を開始します。</p>
+            <p className="field-note">auto はデータ件数に応じて full/diff を自動判定します。</p>
+          </section>
         </div>
         <div className="actions">
-          <button type="button" onClick={load} disabled={loading || !hasToken}>
-            {loading ? "読込中" : "再読込"}
-          </button>
-          <select
-            aria-label="同期方式"
-            value={triggerType}
-            onChange={(event) => setTriggerType(event.target.value as SyncType)}
-            disabled={loading || !hasToken}
-          >
-            <option value="auto">auto</option>
-            <option value="diff">diff</option>
-            <option value="full">full</option>
-          </select>
-          <button type="button" onClick={trigger} disabled={loading || !hasToken}>
-            同期実行
-          </button>
           {!hasToken && <span className="hint">admin token が必要です。</span>}
         </div>
       </section>

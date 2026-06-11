@@ -223,6 +223,30 @@ describe("App", () => {
     );
   });
 
+  it("separates sync refresh from the selected sync-mode action", async () => {
+    sessionStorage.setItem("apiToken", "admin-token");
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          total_addresses: 42,
+          running: false,
+          last_success_at: "2026-06-11T00:00:00Z",
+          last_type: "diff"
+        })
+      )
+      .mockResolvedValueOnce(jsonResponse([]));
+
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "管理" }));
+
+    expect(await screen.findByText("total_addresses")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "状態を再読込" })).toBeInTheDocument();
+    expect(screen.getByText("現在の状態と最新 100 件の履歴だけを再取得します。")).toBeInTheDocument();
+    expect(screen.getByLabelText("同期方式")).toHaveValue("auto");
+    expect(screen.getByText("下のボタンは選択した方式で同期を開始します。")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "選択した方式で同期実行" })).toBeInTheDocument();
+  });
+
   it("clears sync status and run history when the bearer token is removed", async () => {
     sessionStorage.setItem("apiToken", "admin-token");
     vi.mocked(fetch)
@@ -320,7 +344,7 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("button", { name: "管理" }));
     expect(await screen.findByText("total_addresses")).toBeInTheDocument();
     await userEvent.selectOptions(screen.getByLabelText("同期方式"), "auto");
-    await userEvent.click(screen.getByRole("button", { name: "同期実行" }));
+    await userEvent.click(screen.getByRole("button", { name: "選択した方式で同期実行" }));
 
     expect(await screen.findByRole("status")).toHaveTextContent("auto");
     expect(screen.getByText("yes")).toBeInTheDocument();
