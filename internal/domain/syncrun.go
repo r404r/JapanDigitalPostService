@@ -27,6 +27,7 @@ type SyncTrigger string
 const (
 	TriggerSchedule SyncTrigger = "schedule"
 	TriggerManual   SyncTrigger = "manual"
+	TriggerUpload   SyncTrigger = "upload"
 )
 
 // SyncRun 是一次同步运行的可观测记录（docs/architecture.md §4.3）。

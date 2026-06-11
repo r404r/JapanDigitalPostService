@@ -1,6 +1,8 @@
 package sync
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -344,6 +346,124 @@ func TestEngineTriggerAsyncConcurrentRejected(t *testing.T) {
 	if _, err := e.TriggerAsync(domain.SyncFull, domain.TriggerManual); !errors.Is(err, domain.ErrSyncRunning) {
 		t.Fatalf("want ErrSyncRunning, got %v", err)
 	}
+}
+
+func TestEngineUploadFullCSVRecordsRunAndApplies(t *testing.T) {
+	st := openTestStore(t)
+	e := newTestEngine(t, st, nil)
+	data := []byte(strings.Join([]string{rowA, rowB}, "\n") + "\n")
+
+	run, err := e.UploadFull(context.Background(), "utf_ken_all.csv", data)
+	if err != nil {
+		t.Fatalf("UploadFull: %v", err)
+	}
+	if run.Type != domain.SyncFull || run.Trigger != domain.TriggerUpload || run.Status != domain.StatusSuccess {
+		t.Fatalf("run = %+v, want full/upload/success", run)
+	}
+	if run.SourceURL != "upload:utf_ken_all.csv" || run.FileSize != int64(len(data)) || run.FileChecksum == "" {
+		t.Fatalf("source/size/checksum = %q/%d/%q", run.SourceURL, run.FileSize, run.FileChecksum)
+	}
+	if run.RowsAdded != 2 || run.RowsTotal != 2 {
+		t.Fatalf("counts added=%d total=%d, want 2/2", run.RowsAdded, run.RowsTotal)
+	}
+	if got := count(t, st); got != 2 {
+		t.Fatalf("addresses = %d, want 2", got)
+	}
+}
+
+func TestEngineUploadFullZip(t *testing.T) {
+	st := openTestStore(t)
+	e := newTestEngine(t, st, nil)
+	data := zipCSV(t, "utf_ken_all.csv", []byte(rowA+"\n"))
+
+	run, err := e.UploadFull(context.Background(), "ken_all.zip", data)
+	if err != nil {
+		t.Fatalf("UploadFull zip: %v", err)
+	}
+	if run.Status != domain.StatusSuccess || run.RowsAdded != 1 || run.SourceURL != "upload:ken_all.zip" {
+		t.Fatalf("run = %+v, want successful zip upload", run)
+	}
+}
+
+func TestEngineUploadFullRejectsBadEncodingAndRecordsFailure(t *testing.T) {
+	st := openTestStore(t)
+	e := newTestEngine(t, st, nil)
+	data := []byte{0x82, 0xa0, '\n'} // invalid UTF-8 bytes representative of Shift-JIS input.
+
+	run, err := e.UploadFull(context.Background(), "utf_ken_all.csv", data)
+	if !errors.Is(err, ErrUploadEncoding) {
+		t.Fatalf("err=%v, want ErrUploadEncoding", err)
+	}
+	if run == nil || run.Status != domain.StatusFailed || run.Trigger != domain.TriggerUpload {
+		t.Fatalf("run=%+v, want failed upload run", run)
+	}
+	latest, lerr := st.SyncRuns().Latest(context.Background())
+	if lerr != nil {
+		t.Fatalf("Latest: %v", lerr)
+	}
+	if latest == nil || latest.Status != domain.StatusFailed || !strings.Contains(latest.ErrorMessage, "UTF-8") {
+		t.Fatalf("latest=%+v, want recorded UTF-8 failure", latest)
+	}
+}
+
+func TestEngineUploadFullConcurrentRejected(t *testing.T) {
+	st := openTestStore(t)
+	e := newTestEngine(t, st, nil)
+
+	release, ok, err := st.Locker().Acquire(context.Background(), "holder-x")
+	if err != nil || !ok {
+		t.Fatalf("acquire: ok=%v err=%v", ok, err)
+	}
+	defer release()
+
+	_, err = e.UploadFull(context.Background(), "utf_ken_all.csv", []byte(rowA+"\n"))
+	if !errors.Is(err, domain.ErrSyncRunning) {
+		t.Fatalf("want ErrSyncRunning, got %v", err)
+	}
+}
+
+func TestEngineFinishUploadUsesFreshContextWhenRequestCanceled(t *testing.T) {
+	st := openTestStore(t)
+	e := newTestEngine(t, st, nil)
+
+	run, start, err := e.beginRun(context.Background(), domain.SyncFull, domain.TriggerUpload)
+	if err != nil {
+		t.Fatalf("beginRun: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err = e.finishUpload(ctx, run, start, ApplyResult{Added: 1, Total: 1}, context.Canceled)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err=%v, want context.Canceled", err)
+	}
+	latest, lerr := st.SyncRuns().Latest(context.Background())
+	if lerr != nil {
+		t.Fatalf("Latest: %v", lerr)
+	}
+	if latest == nil || latest.Status != domain.StatusFailed || latest.FinishedAt == nil {
+		t.Fatalf("latest=%+v, want failed finalized run", latest)
+	}
+	if !strings.Contains(latest.ErrorMessage, "context canceled") {
+		t.Fatalf("error=%q, want context canceled", latest.ErrorMessage)
+	}
+}
+
+func zipCSV(t *testing.T, name string, data []byte) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	w, err := zw.Create(name)
+	if err != nil {
+		t.Fatalf("zip create: %v", err)
+	}
+	if _, err := w.Write(data); err != nil {
+		t.Fatalf("zip write: %v", err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatalf("zip close: %v", err)
+	}
+	return buf.Bytes()
 }
 
 func TestEngineShutdownCancelsTriggerAsyncAndMarksRunFailed(t *testing.T) {

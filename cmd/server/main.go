@@ -121,6 +121,7 @@ func main() {
 		AddressReader: reader,
 		SyncRuns:      st.SyncRuns(),
 		SyncTrigger:   engine,
+		SyncUploader:  engine,
 		Auth:          authSvc,
 		TokenHandlers: tokenHandlers,
 		Settings:      settingsAPI,

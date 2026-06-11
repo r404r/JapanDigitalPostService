@@ -8,7 +8,10 @@ export type ApiStatus =
   | "not_found"
   | "rate_limited"
   | "internal_error"
-  | "sync_running";
+  | "sync_running"
+  | "unsupported_file"
+  | "unzip_failed"
+  | "csv_format_error";
 
 export type Address = {
   zipcode?: string;
@@ -42,7 +45,11 @@ export type SyncRun = {
   id: string;
   type: SyncType;
   status: "running" | "success" | "failed";
-  trigger?: "schedule" | "manual";
+  trigger?: "schedule" | "manual" | "upload";
+  source_url?: string;
+  file_checksum?: string;
+  file_size?: number;
+  diff_period?: string | null;
   rows_added?: number;
   rows_updated?: number;
   rows_deleted?: number;
@@ -64,6 +71,23 @@ export type TokenInfo = {
 
 export type CreatedToken = TokenInfo & {
   token: string;
+};
+
+export type AdminSetting<T> = {
+  value: T;
+  default: T;
+  overridden: boolean;
+};
+
+export type AdminSettings = {
+  download_max_retry: AdminSetting<number>;
+  scrape_full_url: AdminSetting<string>;
+};
+
+export type AdminSettingsUpdate = {
+  download_max_retry?: number;
+  scrape_full_url?: string;
+  reset_to_default?: Array<keyof AdminSettings>;
 };
 
 export type ApiError = {
@@ -104,6 +128,26 @@ export class ApiClient {
     });
   }
 
+  getAdminSettings() {
+    return this.request<AdminSettings>("/admin/settings");
+  }
+
+  updateAdminSettings(input: AdminSettingsUpdate) {
+    return this.request<AdminSettings>("/admin/settings", {
+      method: "PUT",
+      body: JSON.stringify(input)
+    });
+  }
+
+  uploadSync(file: File) {
+    const body = new FormData();
+    body.append("file", file);
+    return this.request<SyncRun>("/sync/upload", {
+      method: "POST",
+      body
+    });
+  }
+
   listTokens() {
     return this.request<TokenInfo[]>("/tokens");
   }
@@ -124,7 +168,7 @@ export class ApiClient {
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const token = this.getToken().trim();
     const headers = new Headers(init.headers);
-    if (!headers.has("Content-Type") && init.body) {
+    if (!headers.has("Content-Type") && init.body && !(init.body instanceof FormData)) {
       headers.set("Content-Type", "application/json");
     }
     if (token) {
@@ -210,6 +254,12 @@ export function defaultErrorMessage(status?: string) {
       return "結果が多すぎます。条件を追加してください。";
     case "sync_running":
       return "同期はすでに実行中です。";
+    case "unsupported_file":
+      return "zip または csv ファイルを選択してください。";
+    case "unzip_failed":
+      return "zip ファイルを展開できませんでした。";
+    case "csv_format_error":
+      return "UTF-8 の utf_ken_all CSV のみ対応しています。";
     default:
       return "サービスエラーが発生しました。";
   }

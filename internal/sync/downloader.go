@@ -148,12 +148,19 @@ func (f *HTTPFetcher) fetchOnce(ctx context.Context, url string) ([]byte, error)
 // openZipCSV 从 zip 字节中取出首个 .csv 条目的读取流。返回的 ReadCloser 关闭后
 // 释放该条目。
 func openZipCSV(data []byte) (io.ReadCloser, error) {
+	return openZipCSVWithLimit(data, 0)
+}
+
+func openZipCSVWithLimit(data []byte, maxUncompressed int64) (io.ReadCloser, error) {
 	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
 		return nil, err
 	}
 	for _, file := range zr.File {
 		if strings.HasSuffix(strings.ToLower(file.Name), ".csv") {
+			if maxUncompressed > 0 && int64(file.UncompressedSize64) > maxUncompressed {
+				return nil, fmt.Errorf("csv entry too large: %d bytes", file.UncompressedSize64)
+			}
 			return file.Open()
 		}
 	}

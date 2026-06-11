@@ -1,8 +1,11 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,9 +14,12 @@ import (
 
 	"github.com/r404r/JapanDigitalPostService/internal/auth"
 	"github.com/r404r/JapanDigitalPostService/internal/domain"
+	syncpkg "github.com/r404r/JapanDigitalPostService/internal/sync"
 )
 
 // ---- 测试替身 ----
+
+const syncUploadRowA = `01101,"060  ","0600000","ホッカイドウ","サッポロシチュウオウク","イカニケイサイガナイバアイ","北海道","札幌市中央区","以下に掲載がない場合",0,0,0,0,0,0`
 
 // fakeReader 实现 domain.AddressReader：只关心 CountAll。
 type fakeReader struct {
@@ -65,6 +71,21 @@ func (f *fakeTrigger) TriggerAsync(reqType domain.SyncType, _ domain.SyncTrigger
 	return f.run, f.err
 }
 
+type fakeUploader struct {
+	run      *domain.SyncRun
+	err      error
+	called   bool
+	filename string
+	data     []byte
+}
+
+func (f *fakeUploader) UploadFull(_ context.Context, filename string, data []byte) (*domain.SyncRun, error) {
+	f.called = true
+	f.filename = filename
+	f.data = data
+	return f.run, f.err
+}
+
 // newSyncRouter 装配一个带真实 auth 鉴权的 router（admin bootstrap token 注入），
 // 返回 handler、admin 与 read 明文 token。
 func newSyncRouter(t *testing.T, opts Options) (http.Handler, string, string) {
@@ -91,6 +112,32 @@ func doAuth(t *testing.T, h http.Handler, method, path, bearer, body string) *ht
 	} else {
 		r = httptest.NewRequest(method, path, nil)
 	}
+	if bearer != "" {
+		r.Header.Set("Authorization", "Bearer "+bearer)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, r)
+	return rec
+}
+
+func doMultipartAuth(t *testing.T, h http.Handler, path, bearer, field, filename string, data []byte) *httptest.ResponseRecorder {
+	t.Helper()
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	if field != "" {
+		part, err := mw.CreateFormFile(field, filename)
+		if err != nil {
+			t.Fatalf("CreateFormFile: %v", err)
+		}
+		if _, err := part.Write(data); err != nil {
+			t.Fatalf("write multipart: %v", err)
+		}
+	}
+	if err := mw.Close(); err != nil {
+		t.Fatalf("close multipart: %v", err)
+	}
+	r := httptest.NewRequest("POST", path, &buf)
+	r.Header.Set("Content-Type", mw.FormDataContentType())
 	if bearer != "" {
 		r.Header.Set("Authorization", "Bearer "+bearer)
 	}
@@ -273,5 +320,105 @@ func TestSyncTrigger_BadType(t *testing.T) {
 	}
 	if tr.called {
 		t.Error("trigger should not be called for invalid input")
+	}
+}
+
+func TestSyncUpload_AdminOK(t *testing.T) {
+	up := &fakeUploader{run: &domain.SyncRun{
+		ID: "upload-1", Type: domain.SyncFull, Status: domain.StatusSuccess, Trigger: domain.TriggerUpload,
+		SourceURL: "upload:utf_ken_all.csv", RowsTotal: 1,
+	}}
+	h, admin, _ := newSyncRouter(t, Options{SyncUploader: up})
+
+	rec := doMultipartAuth(t, h, "/v1/sync/upload", admin, "file", "utf_ken_all.csv", []byte(syncUploadRowA+"\n"))
+	if rec.Code != 200 {
+		t.Fatalf("code=%d, want 200 body=%s", rec.Code, rec.Body.String())
+	}
+	if !up.called || up.filename != "utf_ken_all.csv" || string(up.data) != syncUploadRowA+"\n" {
+		t.Fatalf("upload called=%v filename=%q data=%q", up.called, up.filename, string(up.data))
+	}
+	var body syncRunDTO
+	_ = json.NewDecoder(rec.Body).Decode(&body)
+	if body.ID != "upload-1" || body.Trigger != "upload" || body.Status != "success" {
+		t.Fatalf("body = %+v, want upload success", body)
+	}
+}
+
+func TestSyncUpload_ReadForbidden(t *testing.T) {
+	up := &fakeUploader{run: &domain.SyncRun{ID: "x"}}
+	h, _, read := newSyncRouter(t, Options{SyncUploader: up})
+	rec := doMultipartAuth(t, h, "/v1/sync/upload", read, "file", "utf_ken_all.csv", []byte(syncUploadRowA+"\n"))
+	if rec.Code != 403 {
+		t.Fatalf("code=%d, want 403", rec.Code)
+	}
+	if up.called {
+		t.Fatal("uploader should not be called")
+	}
+}
+
+func TestSyncUpload_Conflict(t *testing.T) {
+	up := &fakeUploader{err: domain.ErrSyncRunning}
+	h, admin, _ := newSyncRouter(t, Options{SyncUploader: up})
+	rec := doMultipartAuth(t, h, "/v1/sync/upload", admin, "file", "utf_ken_all.csv", []byte(syncUploadRowA+"\n"))
+	if rec.Code != 409 {
+		t.Fatalf("code=%d, want 409", rec.Code)
+	}
+	var body errorDTO
+	_ = json.NewDecoder(rec.Body).Decode(&body)
+	if body.Status != "sync_running" || !strings.Contains(body.Message, "同期が実行中") {
+		t.Fatalf("body = %+v, want sync_running Japanese message", body)
+	}
+}
+
+func TestSyncUpload_RejectsUnsupportedExtensionBeforeEngine(t *testing.T) {
+	up := &fakeUploader{run: &domain.SyncRun{ID: "x"}}
+	h, admin, _ := newSyncRouter(t, Options{SyncUploader: up})
+	rec := doMultipartAuth(t, h, "/v1/sync/upload", admin, "file", "ken_all.txt", []byte(syncUploadRowA+"\n"))
+	if rec.Code != 400 {
+		t.Fatalf("code=%d, want 400", rec.Code)
+	}
+	var body errorDTO
+	_ = json.NewDecoder(rec.Body).Decode(&body)
+	if body.Status != "unsupported_file" {
+		t.Fatalf("status=%s, want unsupported_file", body.Status)
+	}
+	if up.called {
+		t.Fatal("uploader should not be called")
+	}
+}
+
+func TestSyncUploadMultipartLimitCanCarryRawCSV(t *testing.T) {
+	if maxUploadBytes <= 128<<20 {
+		t.Fatalf("maxUploadBytes=%d must exceed raw CSV cap plus multipart overhead", maxUploadBytes)
+	}
+}
+
+func TestSyncUpload_MapsEngineErrorsToJapaneseStructuredErrors(t *testing.T) {
+	cases := []struct {
+		name   string
+		err    error
+		code   int
+		status string
+		msg    string
+	}{
+		{"encoding", syncpkg.ErrUploadEncoding, 422, "csv_format_error", "Shift-JIS"},
+		{"parse", errors.New("parse full: record 1 has 1 columns, want 15"), 422, "csv_format_error", "utf_ken_all"},
+		{"unzip", errors.New("open uploaded zip: zip: not a valid zip file"), 422, "unzip_failed", "解凍"},
+		{"import", errors.New("upsert failed"), 500, "internal_error", "取り込み"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			up := &fakeUploader{err: c.err}
+			h, admin, _ := newSyncRouter(t, Options{SyncUploader: up})
+			rec := doMultipartAuth(t, h, "/v1/sync/upload", admin, "file", "utf_ken_all.csv", []byte(syncUploadRowA+"\n"))
+			if rec.Code != c.code {
+				t.Fatalf("code=%d, want %d body=%s", rec.Code, c.code, rec.Body.String())
+			}
+			var body errorDTO
+			_ = json.NewDecoder(rec.Body).Decode(&body)
+			if body.Status != c.status || !strings.Contains(body.Message, c.msg) {
+				t.Fatalf("body=%+v, want status %s message containing %q", body, c.status, c.msg)
+			}
+		})
 	}
 }

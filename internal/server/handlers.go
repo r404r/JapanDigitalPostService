@@ -77,6 +77,7 @@ type handlers struct {
 	runs         domain.SyncRunRepository // 同步状态/历史
 	trigger      SyncTrigger              // 手动触发（异步）
 	settings     SettingsService          // 管理画面运行时设置（GET/PUT /v1/admin/settings）
+	uploader     SyncUploader             // 手工上传全量同步（同步）
 	queryTimeout time.Duration
 	logger       *slog.Logger
 }

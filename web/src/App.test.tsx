@@ -10,6 +10,16 @@ const jsonResponse = (body: unknown, init: ResponseInit = {}) =>
     ...init
   });
 
+const settingsBody = (overrides: Partial<Record<"download_max_retry" | "scrape_full_url", unknown>> = {}) => ({
+  download_max_retry: overrides.download_max_retry ?? { value: 3, default: 3, overridden: false },
+  scrape_full_url:
+    overrides.scrape_full_url ?? {
+      value: "https://www.post.japanpost.jp/service/search/zipcode/download/utf/zip/utf_ken_all.zip",
+      default: "https://www.post.japanpost.jp/service/search/zipcode/download/utf/zip/utf_ken_all.zip",
+      overridden: false
+    }
+});
+
 describe("App", () => {
   beforeEach(() => {
     sessionStorage.clear();
@@ -146,6 +156,7 @@ describe("App", () => {
   it("shows sync status and run history in admin", async () => {
     sessionStorage.setItem("apiToken", "admin-token");
     vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(settingsBody()))
       .mockResolvedValueOnce(
         jsonResponse({
           total_addresses: 15,
@@ -170,7 +181,7 @@ describe("App", () => {
             error_message: null
           }
         ])
-    );
+      );
 
     render(<App />);
     await userEvent.click(screen.getByRole("button", { name: "管理" }));
@@ -183,6 +194,7 @@ describe("App", () => {
   it("loads persisted sync run history when the admin page opens", async () => {
     sessionStorage.setItem("apiToken", "admin-token");
     vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(settingsBody()))
       .mockResolvedValueOnce(
         jsonResponse({
           total_addresses: 42,
@@ -226,6 +238,7 @@ describe("App", () => {
   it("separates sync refresh from the selected sync-mode action", async () => {
     sessionStorage.setItem("apiToken", "admin-token");
     vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(settingsBody()))
       .mockResolvedValueOnce(
         jsonResponse({
           total_addresses: 42,
@@ -250,6 +263,7 @@ describe("App", () => {
   it("clears sync status and run history when the bearer token is removed", async () => {
     sessionStorage.setItem("apiToken", "admin-token");
     vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(settingsBody()))
       .mockResolvedValueOnce(
         jsonResponse({
           total_addresses: 42,
@@ -290,6 +304,7 @@ describe("App", () => {
   it("triggers auto sync and refreshes running state", async () => {
     sessionStorage.setItem("apiToken", "admin-token");
     vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(settingsBody()))
       .mockResolvedValueOnce(
         jsonResponse({
           total_addresses: 0,
@@ -360,6 +375,7 @@ describe("App", () => {
   it("creates a token and hides one-time plaintext", async () => {
     sessionStorage.setItem("apiToken", "admin-token");
     vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(settingsBody()))
       .mockResolvedValueOnce(
         jsonResponse({
           total_addresses: 0,
@@ -413,6 +429,7 @@ describe("App", () => {
   it("groups token action buttons away from token inputs", async () => {
     sessionStorage.setItem("apiToken", "admin-token");
     vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(settingsBody()))
       .mockResolvedValueOnce(
         jsonResponse({
           total_addresses: 0,
@@ -430,5 +447,194 @@ describe("App", () => {
     const tokenActions = screen.getByRole("group", { name: "Token 操作" });
     expect(within(tokenActions).getByRole("button", { name: "発行" })).toBeInTheDocument();
     expect(within(tokenActions).getByRole("button", { name: "一覧更新" })).toBeInTheDocument();
+  });
+
+  it("saves admin settings and restores defaults", async () => {
+    sessionStorage.setItem("apiToken", "admin-token");
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(settingsBody()))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          total_addresses: 0,
+          running: false,
+          last_success_at: null,
+          last_type: null
+        })
+      )
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(
+        jsonResponse(
+          settingsBody({
+            download_max_retry: { value: 5, default: 3, overridden: true }
+          })
+        )
+      )
+      .mockResolvedValueOnce(jsonResponse(settingsBody()));
+
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "管理" }));
+
+    const retryInput = await screen.findByLabelText("リトライ回数");
+    await userEvent.clear(retryInput);
+    await userEvent.type(retryInput, "5");
+    await userEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    expect(await screen.findByText("設定を保存しました。")).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(
+      "/v1/admin/settings",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({
+          download_max_retry: 5,
+          scrape_full_url: "https://www.post.japanpost.jp/service/search/zipcode/download/utf/zip/utf_ken_all.zip"
+        })
+      })
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "既定値に戻す" }));
+
+    expect(await screen.findByText("既定値に戻しました。")).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(
+      "/v1/admin/settings",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({
+          reset_to_default: ["download_max_retry", "scrape_full_url"]
+        })
+      })
+    );
+  });
+
+  it("validates admin setting URL in Japanese before saving", async () => {
+    sessionStorage.setItem("apiToken", "admin-token");
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(settingsBody()))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          total_addresses: 0,
+          running: false,
+          last_success_at: null,
+          last_type: null
+        })
+      )
+      .mockResolvedValueOnce(jsonResponse([]));
+
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "管理" }));
+
+    const urlInput = await screen.findByLabelText("全量取得 URL");
+    await userEvent.clear(urlInput);
+    await userEvent.type(urlInput, "http://example.com/utf_ken_all.zip");
+    await userEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("URL は https で指定してください。");
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("uploads a csv file and refreshes sync history after success", async () => {
+    sessionStorage.setItem("apiToken", "admin-token");
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(settingsBody()))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          total_addresses: 0,
+          running: false,
+          last_success_at: null,
+          last_type: null
+        })
+      )
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: "upload-run",
+          type: "full",
+          status: "success",
+          trigger: "upload",
+          rows_added: 10,
+          rows_updated: 2,
+          rows_deleted: 1,
+          rows_total: 13,
+          started_at: "2026-06-11T00:00:00Z",
+          finished_at: "2026-06-11T00:00:02Z",
+          error_message: null
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          total_addresses: 13,
+          running: false,
+          last_success_at: "2026-06-11T00:00:02Z",
+          last_type: "full"
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            id: "upload-run",
+            type: "full",
+            status: "success",
+            trigger: "upload",
+            rows_added: 10,
+            rows_updated: 2,
+            rows_deleted: 1,
+            rows_total: 13,
+            started_at: "2026-06-11T00:00:00Z",
+            finished_at: "2026-06-11T00:00:02Z",
+            error_message: null
+          }
+        ])
+      );
+
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "管理" }));
+    await screen.findByText("ファイルアップロード");
+
+    await userEvent.upload(screen.getByLabelText(/zip\/csv をドラッグ/), new File(["zipcode"], "utf_ken_all.csv", { type: "text/csv" }));
+    await userEvent.click(screen.getByRole("button", { name: "アップロード実行" }));
+
+    expect(await screen.findByText("取り込みが完了しました。")).toBeInTheDocument();
+    expect(screen.getByText("追加 10 / 更新 2 / 削除 1 / 合計 13")).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(
+      "/v1/sync/upload",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.any(FormData)
+      })
+    );
+    expect(fetch).toHaveBeenCalledWith("/v1/sync/runs?limit=100&offset=0", expect.any(Object));
+  });
+
+  it("shows structured upload errors in Japanese", async () => {
+    sessionStorage.setItem("apiToken", "admin-token");
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(settingsBody()))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          total_addresses: 0,
+          running: false,
+          last_success_at: null,
+          last_type: null
+        })
+      )
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            status: "csv_format_error",
+            message: "UTF-8 の utf_ken_all CSV のみ対応しています。Shift-JIS 版は利用できません。"
+          },
+          { status: 422 }
+        )
+      );
+
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "管理" }));
+    await screen.findByText("ファイルアップロード");
+
+    await userEvent.upload(screen.getByLabelText(/zip\/csv をドラッグ/), new File(["bad"], "utf_ken_all.csv", { type: "text/csv" }));
+    await userEvent.click(screen.getByRole("button", { name: "アップロード実行" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("csv_format_error");
+    expect(screen.getByRole("alert")).toHaveTextContent("Shift-JIS 版は利用できません。");
   });
 });

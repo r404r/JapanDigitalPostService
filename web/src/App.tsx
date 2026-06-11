@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { FormEvent } from "react";
+import type { DragEvent, FormEvent } from "react";
 import { ApiClient } from "./api/client";
 import type {
   Address,
+  AdminSettings,
   ApiError,
   CreatedToken,
   SearchResult,
@@ -256,6 +257,8 @@ function SyncPanel({ api, hasToken }: { api: ApiClient; hasToken: boolean }) {
         </div>
       )}
       {error && <StatusNotice error={error} />}
+      <SettingsPanel api={api} hasToken={hasToken} />
+      <UploadPanel api={api} hasToken={hasToken} onUploaded={load} />
       {status && (
         <section className="panel">
           <div className="metric-row">
@@ -270,6 +273,248 @@ function SyncPanel({ api, hasToken }: { api: ApiClient; hasToken: boolean }) {
         <h3>同期履歴</h3>
         {runs.length === 0 ? <EmptyState text="同期履歴はまだありません。" /> : <SyncRunsTable runs={runs} />}
       </section>
+    </section>
+  );
+}
+
+type SettingsForm = {
+  download_max_retry: string;
+  scrape_full_url: string;
+};
+
+function SettingsPanel({ api, hasToken }: { api: ApiClient; hasToken: boolean }) {
+  const [settings, setSettings] = useState<AdminSettings | null>(null);
+  const [form, setForm] = useState<SettingsForm>({ download_max_retry: "", scrape_full_url: "" });
+  const [error, setError] = useState<ApiError | null>(null);
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const applySettings = (nextSettings: AdminSettings) => {
+    setSettings(nextSettings);
+    setForm({
+      download_max_retry: String(nextSettings.download_max_retry.value),
+      scrape_full_url: nextSettings.scrape_full_url.value
+    });
+  };
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    setMessage("");
+    try {
+      applySettings(await api.getAdminSettings());
+    } catch (caught) {
+      setError(caught as ApiError);
+    } finally {
+      setLoading(false);
+    }
+  }, [api]);
+
+  useEffect(() => {
+    if (!hasToken) {
+      setSettings(null);
+      setForm({ download_max_retry: "", scrape_full_url: "" });
+      setError(null);
+      setMessage("");
+      return;
+    }
+    void load();
+  }, [hasToken, load]);
+
+  const validate = () => {
+    const retry = Number(form.download_max_retry);
+    if (!Number.isInteger(retry) || retry < 0 || retry > 10) {
+      return "リトライ回数は 0 以上 10 以下の整数で指定してください。";
+    }
+    try {
+      const parsed = new URL(form.scrape_full_url);
+      if (parsed.protocol !== "https:") {
+        return "URL は https で指定してください。";
+      }
+      if (parsed.username || parsed.password || !["post.japanpost.jp", "www.post.japanpost.jp"].includes(parsed.hostname)) {
+        return "URL のドメインは日本郵便の公式サイト（post.japanpost.jp）のみ許可されています。";
+      }
+    } catch {
+      return "URL の形式を確認してください。";
+    }
+    return "";
+  };
+
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    const validationError = validate();
+    setError(null);
+    setMessage("");
+    if (validationError) {
+      setError({ status: "invalid_request", message: validationError });
+      return;
+    }
+    setLoading(true);
+    try {
+      applySettings(
+        await api.updateAdminSettings({
+          download_max_retry: Number(form.download_max_retry),
+          scrape_full_url: form.scrape_full_url.trim()
+        })
+      );
+      setMessage("設定を保存しました。");
+    } catch (caught) {
+      setError(caught as ApiError);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetToDefault = async () => {
+    setLoading(true);
+    setError(null);
+    setMessage("");
+    try {
+      applySettings(
+        await api.updateAdminSettings({
+          reset_to_default: ["download_max_retry", "scrape_full_url"]
+        })
+      );
+      setMessage("既定値に戻しました。");
+    } catch (caught) {
+      setError(caught as ApiError);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form className="panel settings-form" onSubmit={save}>
+      <div className="section-heading">
+        <h2>取得設定</h2>
+        <p>全量取得 URL とダウンロードのリトライ回数を変更できます。</p>
+      </div>
+      <div className="input-grid settings-grid">
+        <label>
+          <span>リトライ回数</span>
+          <input
+            aria-label="リトライ回数"
+            inputMode="numeric"
+            value={form.download_max_retry}
+            onChange={(event) => setForm({ ...form, download_max_retry: event.target.value })}
+            disabled={!hasToken || loading}
+          />
+          <small>0 から 10 まで。現在: {settings?.download_max_retry.overridden ? "変更済み" : "既定値"}</small>
+        </label>
+        <label>
+          <span>全量取得 URL</span>
+          <input
+            aria-label="全量取得 URL"
+            value={form.scrape_full_url}
+            onChange={(event) => setForm({ ...form, scrape_full_url: event.target.value })}
+            disabled={!hasToken || loading}
+          />
+          <small>https://post.japanpost.jp または https://www.post.japanpost.jp のみ許可。</small>
+        </label>
+      </div>
+      <div className="actions">
+        <button type="submit" disabled={!hasToken || loading}>
+          保存
+        </button>
+        <button className="secondary-button" type="button" onClick={resetToDefault} disabled={!hasToken || loading}>
+          既定値に戻す
+        </button>
+        <button className="secondary-button" type="button" onClick={load} disabled={!hasToken || loading}>
+          設定を再読込
+        </button>
+        {!hasToken && <span className="hint">admin token が必要です。</span>}
+      </div>
+      {message && <div className="notice success" role="status">{message}</div>}
+      {error && <StatusNotice error={error} />}
+    </form>
+  );
+}
+
+function UploadPanel({ api, hasToken, onUploaded }: { api: ApiClient; hasToken: boolean; onUploaded: () => Promise<void> }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [result, setResult] = useState<SyncRun | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const selectFile = (nextFile?: File) => {
+    setResult(null);
+    setError(null);
+    if (!nextFile) {
+      setFile(null);
+      return;
+    }
+    if (!/\.(csv|zip)$/i.test(nextFile.name)) {
+      setFile(null);
+      setError({ status: "unsupported_file", message: "zip または csv ファイルを選択してください。" });
+      return;
+    }
+    setFile(nextFile);
+  };
+
+  const drop = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    setDragging(false);
+    selectFile(event.dataTransfer.files[0]);
+  };
+
+  const upload = async () => {
+    if (!file) {
+      setError({ status: "invalid_request", message: "アップロードするファイルを選択してください。" });
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const nextRun = await api.uploadSync(file);
+      setResult(nextRun);
+      await onUploaded();
+    } catch (caught) {
+      setError(caught as ApiError);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <section className="panel upload-panel">
+      <div className="section-heading">
+        <h2>ファイルアップロード</h2>
+        <p>zip または UTF-8 csv をアップロードして全量同期として取り込みます。</p>
+      </div>
+      <label
+        className={`dropzone${dragging ? " dragging" : ""}`}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={drop}
+      >
+        <span>{file ? file.name : "zip/csv をドラッグ、またはクリックして選択"}</span>
+        <input
+          aria-label="zip/csv をドラッグ、またはクリックして選択"
+          type="file"
+          accept=".zip,.csv,application/zip,text/csv"
+          disabled={!hasToken || loading}
+          onChange={(event) => selectFile(event.target.files?.[0])}
+        />
+      </label>
+      <div className="actions">
+        <button type="button" onClick={upload} disabled={!hasToken || loading || !file}>
+          {loading ? "アップロード中" : "アップロード実行"}
+        </button>
+        {!hasToken && <span className="hint">admin token が必要です。</span>}
+      </div>
+      {result && (
+        <div className={`notice ${result.status === "success" ? "success" : "warning"}`} role="status">
+          <strong>{result.status === "success" ? "取り込みが完了しました。" : "取り込み結果を確認してください。"}</strong>
+          <span>追加 {result.rows_added ?? 0} / 更新 {result.rows_updated ?? 0} / 削除 {result.rows_deleted ?? 0} / 合計 {result.rows_total ?? countRows(result)}</span>
+          {result.error_message && <span>{result.error_message}</span>}
+        </div>
+      )}
+      {error && <StatusNotice error={error} />}
     </section>
   );
 }
