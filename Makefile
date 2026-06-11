@@ -1,4 +1,4 @@
-.PHONY: build run test test-multidialect db-up db-down lint tidy sync-soul gen
+.PHONY: build run test test-multidialect db-up db-down lint tidy sync-soul gen web-install web-dev web-build web-test
 
 build:
 	go build -o bin/server ./cmd/server
@@ -27,6 +27,18 @@ db-down:
 
 test-multidialect: db-up
 	TEST_POSTGRES_DSN="$(TEST_POSTGRES_DSN)" TEST_MYSQL_DSN="$(TEST_MYSQL_DSN)" go test -v ./internal/store/...
+
+web-install:
+	npm install --prefix web
+
+web-dev:
+	npm run dev --prefix web
+
+web-build:
+	npm run build --prefix web
+
+web-test:
+	npm run test --prefix web
 
 lint:
 	gofmt -l .

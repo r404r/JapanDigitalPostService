@@ -157,10 +157,17 @@
 
 ## 8. 前端 (React sample) 规格
 
+`web/` 提供 Vite + React + TypeScript sample。后端默认在 `localhost:8080`，开发服务器通过 `/v1` 代理访问 API。
+
 三个页面（最小可用）：
-1. **查询页**：输入邮编/都道府県/市区町村/关键字，展示结果表、`total_count`、`truncated`/`too_many_results`/`timeout` 状态提示。
-2. **同步状态页**：展示当前数据量、最近同步、运行历史（`sync_runs`），可手动触发（admin）。
-3. **Token 页**：发行 token（展示一次性明文）、列表、吊销（需 admin）。
+1. **查询页**：输入邮编/都道府県/市区町村/关键字，展示结果表、OpenAPI 字段 `total_count` / `returned_count` / `items`，并可展示 `items.length` 作为本次返回地址数量；同时展示 `truncated`/`too_many_results`/`timeout` 状态提示。
+2. **同步状态页**：展示 `total_addresses`、最近成功同步时间/类型、是否运行中、运行历史（类型、状态、时间、`rows_total` 处理数量、错误摘要），可手动触发 full/diff（admin）。
+3. **Token 页**：发行 token（明文仅展示一次并提示保存）、脱敏列表、吊销（需 admin）。
+
+通用行为：
+- Bearer token 由用户输入，仅保存在浏览器 `sessionStorage`，不硬编码。
+- timeout、认证失败、权限不足、结果过多、0 结果、服务错误均显示明确 UI 状态。
+- sample UI 保持轻量，不承担完整后台产品化能力。
 
 ## 9. 测试规格（可复用）
 
@@ -197,3 +204,4 @@
 | 2026-06-11 | merge | task-0004/0005/0006 合流：查询读路径改跑在 GORM 统一 schema 上（移除独立建表）；读接口更名 `domain.AddressReader`（同步写接口仍为 `AddressRepository`）；`SEED_SAMPLE_DATA` 默认改为 `false`（同步引擎已就位，避免示例数据使 auto 同步误判为 diff）。查询端点 Bearer 校验仍为占位，待装配 task 接入。 |
 | 2026-06-11 | GHO-33 (task-0004 review 收口) | 修复 review 三处缺陷：①差分窗口 `monthsWindow` 月末回退归一到月初，消除跳月/重复；②逻辑唯一键并入 `town_kana`（§2/§4 第 5 点），保留同键异读音、落库 124,511 条并消除同批 upsert 冲突，含存量库迁移说明；③同步锁 `release` 加 holder 校验，避免 TTL 抢占后误放他人锁。补单测覆盖三者；architecture §5.3 同步更新。 |
 | 2026-06-11 | GHO-34 (task-0002 多数据库移植) | 把 task-0002 的多方言存储能力整合进当前 main：`store.Open` 接入 PG/MySQL 驱动（保留连接超时/退避重试），Token 改用 GORM 持久化（替换内存 store，重启不丢）；新增 `domain.ErrConflict`（唯一冲突归一，§5/§7 引导 token 幂等收口）；`migrations/` 补三方言 `0001_init.*.sql`（4 列唯一键、`tokens.expires_at`、`sync_locks`）；新增 PG/MySQL 集成测试（`TEST_*_DSN`，§9）与 CI service 容器 job。方言适配：`town_kana` 收紧至 256 以满足 MySQL InnoDB 索引前缀上限；锁行 `acquired_at` 用纪元哨兵避免 MySQL 严格模式拒绝零值。 |
+| 2026-06-11 | task-0007 | 实现 React sample 查询、同步状态/历史、token 发行/管理页面与前端验证范围 |
