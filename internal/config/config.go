@@ -21,6 +21,7 @@ const (
 // Config 是服务运行配置。
 type Config struct {
 	HTTPAddr     string        // HTTP_ADDR
+	StaticDir    string        // STATIC_DIR: optional React production build directory
 	QueryTimeout time.Duration // QUERY_TIMEOUT
 	FuzzyLimit   int           // FUZZY_LIMIT
 	MaxTotal     int           // MAX_TOTAL
@@ -64,6 +65,7 @@ type Config struct {
 func Load() Config {
 	return Config{
 		HTTPAddr:     getEnv("HTTP_ADDR", ":8080"),
+		StaticDir:    getEnv("STATIC_DIR", ""),
 		QueryTimeout: getDuration("QUERY_TIMEOUT", 2*time.Second),
 		FuzzyLimit:   getInt("FUZZY_LIMIT", 20),
 		MaxTotal:     getInt("MAX_TOTAL", 1000),
