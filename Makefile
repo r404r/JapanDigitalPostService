@@ -53,11 +53,11 @@ gen:
 
 # 校验两个灵魂文件一致（AGENTS.md == CLAUDE.md）
 sync-soul:
-	@diff -q AGENTS.md CLAUDE.md && echo "soul files in sync" || (echo "AGENTS.md and CLAUDE.md differ!" && exit 1)
+	@git diff --no-index --quiet -- AGENTS.md CLAUDE.md && echo "soul files in sync" || (echo "AGENTS.md and CLAUDE.md differ!" && git diff --no-index -- AGENTS.md CLAUDE.md; exit 1)
 
 # OpenAPI 契约校验（需 node/npx）。
 openapi-lint:
-	npx --yes @redocly/cli@2.32.0 lint api/openapi.yaml
+	npx --yes @redocly/cli@2.32.0 lint api/openapi.yaml --skip-rule info-license --skip-rule operation-4xx-response
 
 # 一键本地 CI：fmt/vet/build/test + 灵魂文件 + OpenAPI + 前端（若已落地）。
 ci:

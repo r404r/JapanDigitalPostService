@@ -26,7 +26,7 @@
 
 ## 3. API 规格
 
-所有数据端点要求 `Authorization: Bearer <token>`。基地址 `/v1`。完整契约见 [`api/openapi.yaml`](../api/openapi.yaml)。
+所有数据端点要求 `Authorization: Bearer <token>`。基地址 `/v1`。完整契约见 [`api/openapi.yaml`](../api/openapi.yaml)，人读版 API 规格见 [`docs/api/v1.md`](api/v1.md)。
 
 ### 3.1 `GET /v1/health`
 - 无需认证。返回 `{ "status": "ok", "version": "..." }`。
@@ -218,3 +218,4 @@
 | 2026-06-11 | task-0012 | 补充 `node_modules` 类目录 ignore、README 手工测试容器按最新代码重建 app 的步骤，并将 React sample 视觉调整为日本邮便番号検索风格。无 OpenAPI 变更。 |
 | 2026-06-11 | task-0013 | React sample 改用日文字体优先的本机字体栈，并将管理页同期操作拆成“状态再読込”和“選択した方式で同期実行”两个明确区域，消除下拉框适用范围歧义。无 OpenAPI 变更。 |
 | 2026-06-11 | task-0014 | 优化 React sample 管理页 Token 表单的输入区与按钮区间距，并将按钮声明为独立操作组，改善可扫读性。无 OpenAPI 变更。 |
+| 2026-06-11 | task-0015 | 新增 `docs/api/` 人读版 API 规格，补齐 OpenAPI read/admin 端点 403 响应声明，并强化 task 收口时的 README/spec/architecture/API 文档影响判定规则。 |

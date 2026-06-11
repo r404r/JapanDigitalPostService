@@ -6,7 +6,7 @@
 
 - 架构设计: [`docs/architecture.md`](docs/architecture.md)
 - 功能规格: [`docs/spec.md`](docs/spec.md)
-- API 契约: [`api/openapi.yaml`](api/openapi.yaml)
+- API 文档: [`docs/api/`](docs/api/)（人读版） / [`api/openapi.yaml`](api/openapi.yaml)（OpenAPI 契约源）
 - 任务拆解: [`docs/tasks/`](docs/tasks/)（含 [索引](docs/tasks/README.md)）
 - Agent 工作约定: [`AGENTS.md`](AGENTS.md) / [`CLAUDE.md`](CLAUDE.md)（同一份）
 
@@ -82,7 +82,57 @@ ADMIN_BOOTSTRAP_TOKEN=jdps_local_admin_example_token make run   # 监听 :8080
 
 curl localhost:8080/v1/health      # 唯一的公开端点，无需 token
 # {"status":"ok","version":"..."}
+```
 
+#### Bearer token 的设定与生成
+
+API 调用时，token 放在 HTTP header 中：
+
+```bash
+Authorization: Bearer <token>
+```
+
+React 画面的 `Bearer token` 输入框里只填写 token 本体，例如 `jdps_manual_admin_token`，不要输入 `Bearer ` 前缀。
+
+服务启动时可用 `ADMIN_BOOTSTRAP_TOKEN` 注入第一个 admin token。上面的本地启动示例使用：
+
+```bash
+ADMIN_BOOTSTRAP_TOKEN=jdps_local_admin_example_token make run
+```
+
+全功能手工测试容器默认已在 `deployments/manual-test.env` 中设定：
+
+```dotenv
+ADMIN_BOOTSTRAP_TOKEN=jdps_manual_admin_token
+```
+
+因此，用 `deployments/manual-test.compose.yml` 启动后，页面的 `Bearer token` 输入框可以直接填：
+
+```text
+jdps_manual_admin_token
+```
+
+生成新的 read token：
+
+```bash
+curl -X POST http://localhost:8080/v1/tokens \
+  -H "Authorization: Bearer jdps_manual_admin_token" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"frontend-read","scope":"read","ttl_seconds":86400}'
+```
+
+生成新的 admin token：
+
+```bash
+curl -X POST http://localhost:8080/v1/tokens \
+  -H "Authorization: Bearer jdps_manual_admin_token" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"admin-user","scope":"admin"}'
+```
+
+创建响应中的 `token` 字段是明文 token，只返回一次。服务端只保存 hash，明文丢失后无法找回，只能用已有 admin token 重新发行。
+
+```bash
 # 查询端点需要 read 或 admin scope 的 Bearer token（无 token → 401）
 T='Authorization: Bearer jdps_local_admin_example_token'
 

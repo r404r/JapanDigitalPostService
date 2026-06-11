@@ -13,13 +13,15 @@
 2. `docs/spec.md` — 当前功能行为的权威定义。
 3. `docs/tasks/task-xxxx.md` — 你要做的具体任务（goal / 完成条件 / 实施边界）。
 4. `api/openapi.yaml` — 接口契约，spec-first，改接口先改它。
+5. `docs/api/` — API 人读版规格；改接口时必须与 OpenAPI 同步。
 
 ## 2. 工作流（每个 task）
-1. 认领一个 `task-xxxx.md`，严格按其"实施边界"工作，**不越界**改其它模块。
-2. 实现 → 写/更新可复用测试 → 本地通过 `make test`。
-3. **若改变了对外行为**：同步更新 `docs/spec.md`（含底部变更记录表）与 `api/openapi.yaml`。
-4. **每完成一个 task 提交一次**（一个 task = 一个聚焦 commit/PR）。
-5. 在对应 issue 说明：提交内容、验证方式、关键决策、剩余风险。
+1. 认领或新建一个 `task-xxxx.md`，严格按其"实施边界"工作，**不越界**改其它模块。
+2. 新建 task 时，`完成条件` 的最后一项必须是：`文档影响判定：检查 README、docs/spec.md、docs/architecture.md、docs/api/*、api/openapi.yaml 是否需要更新；需要则同步更新，不需要则说明无需更新。`
+3. 实现 → 写/更新可复用测试 → 本地通过 `make test`。
+4. **每完成一个 task，最后必须执行文档影响判定**：若改变对外行为，同步更新 `docs/spec.md`（含底部变更记录表）；若改变接口，同步更新 `api/openapi.yaml` 与 `docs/api/`；若改变部署/使用/架构，同步更新 README / architecture。即使无需更新，也要在 task 文档或最终说明中写明判断结果。
+5. **每完成一个 task 提交一次**（一个 task = 一个聚焦 commit/PR）。
+6. 在对应 issue 说明：提交内容、验证方式、关键决策、剩余风险。
 
 ## 3. 提交规范
 - commit message 前缀任务号：`task-0003: parse utf_ken_all CSV`。
@@ -42,7 +44,7 @@
 ## 6. 不要做
 - 不要一次性实现多个 task。
 - 不要绕过 task 的实施边界去"顺手重构"无关代码。
-- 不要让 spec / openapi 与代码不一致后才提交。
+- 不要让 README / spec / architecture / docs/api / openapi 与代码不一致后才提交。
 - 不要在未设计前实现高风险点（多方言、批处理幂等、token 安全、加密、查询超时）——这些先有 spec/ADR。
 
 ## 7. 关键决策（速查，详见 architecture）

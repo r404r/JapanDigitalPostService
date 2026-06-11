@@ -1,6 +1,7 @@
 # 任务索引与分派顺序
 
 每个 `task-xxxx.md` 含 goal / 完成条件 / 实施边界 / 依赖。**一个 task = 一次提交**。
+新建 task 时，完成条件的最后一项必须是文档影响判定：检查 README、`docs/spec.md`、`docs/architecture.md`、`docs/api/*`、`api/openapi.yaml` 是否需要更新；需要则同步更新，不需要则在 task 中说明无需更新。
 Squad leader 按依赖逐个分派；backlog 任务不要一次性全部并行启动。
 
 ## 依赖与顺序

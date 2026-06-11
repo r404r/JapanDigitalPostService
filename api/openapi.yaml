@@ -40,6 +40,7 @@ paths:
               schema: { $ref: '#/components/schemas/SearchResult' }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
         '504': { $ref: '#/components/responses/Error' }
   /addresses/{zipcode}:
     get:
@@ -55,6 +56,7 @@ paths:
               schema: { $ref: '#/components/schemas/SearchResult' }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
         '504': { $ref: '#/components/responses/Error' }
   /sync/status:
@@ -68,6 +70,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/SyncStatus' }
         '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
   /sync/runs:
     get:
       summary: 同步运行历史
@@ -84,6 +87,7 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/SyncRun' }
         '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
   /sync/trigger:
     post:
       summary: 手动触发同步（admin）
