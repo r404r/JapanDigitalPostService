@@ -33,12 +33,14 @@ export type SyncStatus = {
   total_addresses: number;
   running: boolean;
   last_success_at: string | null;
-  last_type: "full" | "diff" | null;
+  last_type: SyncType | null;
 };
+
+export type SyncType = "auto" | "full" | "diff";
 
 export type SyncRun = {
   id: string;
-  type: "full" | "diff";
+  type: SyncType;
   status: "running" | "success" | "failed";
   trigger?: "schedule" | "manual";
   rows_added?: number;
@@ -95,7 +97,7 @@ export class ApiClient {
     return this.request<SyncRun[]>("/sync/runs?limit=20&offset=0");
   }
 
-  triggerSync(type: "full" | "diff") {
+  triggerSync(type: SyncType) {
     return this.request<SyncRun>("/sync/trigger", {
       method: "POST",
       body: JSON.stringify({ type })

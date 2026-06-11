@@ -132,6 +132,16 @@ h3 {
   gap: 16px;
 }
 
+.admin-workspace {
+  gap: 24px;
+}
+
+.admin-section {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
 .panel {
   border: 1px solid #d9e2ec;
   border-radius: 8px;

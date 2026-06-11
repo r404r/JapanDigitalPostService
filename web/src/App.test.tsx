@@ -143,7 +143,7 @@ describe("App", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("query timed out");
   });
 
-  it("shows sync status and run history", async () => {
+  it("shows sync status and run history in admin", async () => {
     sessionStorage.setItem("apiToken", "admin-token");
     vi.mocked(fetch)
       .mockResolvedValueOnce(
@@ -173,12 +173,72 @@ describe("App", () => {
       );
 
     render(<App />);
-    await userEvent.click(screen.getByRole("button", { name: "同期" }));
+    await userEvent.click(screen.getByRole("button", { name: "管理" }));
     await userEvent.click(screen.getByRole("button", { name: "再読込" }));
 
     expect(await screen.findByText("total_addresses")).toBeInTheDocument();
     expect(screen.getAllByText("full").length).toBeGreaterThan(0);
     expect(screen.getByText("success")).toBeInTheDocument();
+  });
+
+  it("triggers auto sync and refreshes running state", async () => {
+    sessionStorage.setItem("apiToken", "admin-token");
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: "run-auto",
+          type: "auto",
+          status: "running",
+          trigger: "manual",
+          rows_added: 0,
+          rows_updated: 0,
+          rows_deleted: 0,
+          rows_total: 0,
+          started_at: "2026-06-11T00:00:00Z",
+          finished_at: null,
+          error_message: null
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          total_addresses: 15,
+          running: true,
+          last_success_at: "2026-06-11T00:00:00Z",
+          last_type: "full"
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            id: "run-auto",
+            type: "auto",
+            status: "running",
+            trigger: "manual",
+            rows_added: 0,
+            rows_updated: 0,
+            rows_deleted: 0,
+            rows_total: 0,
+            started_at: "2026-06-11T00:00:00Z",
+            finished_at: null,
+            error_message: null
+          }
+        ])
+      );
+
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "管理" }));
+    await userEvent.selectOptions(screen.getByLabelText("同期方式"), "auto");
+    await userEvent.click(screen.getByRole("button", { name: "同期実行" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("auto");
+    expect(screen.getByText("yes")).toBeInTheDocument();
+    expect(screen.getAllByText("running").length).toBeGreaterThan(0);
+    expect(fetch).toHaveBeenCalledWith(
+      "/v1/sync/trigger",
+      expect.objectContaining({
+        body: JSON.stringify({ type: "auto" })
+      })
+    );
   });
 
   it("creates a token and hides one-time plaintext", async () => {
@@ -211,10 +271,10 @@ describe("App", () => {
             revoked_at: null
           }
         ])
-      );
+    );
 
     render(<App />);
-    await userEvent.click(screen.getByRole("button", { name: "Tokens" }));
+    await userEvent.click(screen.getByRole("button", { name: "管理" }));
     await userEvent.type(screen.getByLabelText("名前"), "sample");
     await userEvent.click(screen.getByRole("button", { name: "発行" }));
 
