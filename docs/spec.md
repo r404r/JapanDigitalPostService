@@ -22,7 +22,7 @@
   - ⚠️ 下载说明页 `utf-zip.html` 上的相对链接 base（`/zipcode/dl/utf/zip/`）对 add/del/ken_all 均 **404**；可用 base 是上面的 `service/search/...` 路径。已对 `utf_add_2605` / `utf_del_2605` 实测确认格式与全量一致。
 - 格式: UTF-8 CSV，15 列（`readme.html` 定义）。UTF 版读み仮名为 **全角カタカナ**，且 **1 邮编 1 行**（不像 Shift-JIS 版会因超长跨行分割），故无需合并续行。第 14 列=更新区分（0 无变更 / 1 变更 / 2 废止），第 15 列=变更理由，二者为差分元数据，不入主表。
 - 列映射：JIS 码、(旧)邮编、邮编(7)、都道府県/市区町村/町域 カナ、都道府県/市区町村/町域 汉字、4 个描述性标志位（一町域多邮编 / 小字 / 丁目 / 一邮编多町域）。
-- 注意：全量文件中极个别 `(zipcode, jis_code, town)` 逻辑键重复（实测 1 处：`6730012/28203/和坂`），upsert 以后写覆盖，落库 124,510 条；全量重跑会稳定记 `updated≥1`（确定性，非数据损坏）。
+- 注意：全量文件中极个别 `(zipcode, jis_code, town)` 三元组对应**多种读音**（实测 1 处：`6730012/28203/和坂` 有 `カニガサカ` / `ワサカ` 两行），属合法的不同地址记录而非重复。逻辑唯一键含 `town_kana`（见 §4 第 5 点），故两行各自独立落库，**全量解压 124,511 行 → 落库 124,511 条**；全量重跑稳定全 `unchanged`（确定性）。
 
 ## 3. API 规格
 
@@ -91,10 +91,12 @@
 
 1. 调度：`cmd/server` 进程内 `robfig/cron` 按 `SYNC_CRON`（默认 `0 3 * * *`，每天 03:00）触发 `auto` 同步；可由 `SYNC_SCHEDULER_ENABLED=false` 关闭。`cmd/batch --type auto|full|diff` 为独立入口，供外部调度器（K8s CronJob / 系统 cron）触发，与 server 共用同一引擎与 DB 锁。
 2. 判定：`auto` 时 `addresses` 为空 → full；否则 → diff。手动可强制 `full`/`diff`。
-3. full：下载 zip → 校验大小 → 解压 → **流式**逐行解析（不全量入内存）→ 分批 upsert（默认 1000/批，`ON CONFLICT(zipcode,jis_code,town)`）→ 可选剪除官方文件中已消失的地址（`SYNC_FULL_PRUNE`，行数低于 `SYNC_FULL_MIN_ROWS` 时跳过剪枝以防截断文件误删）→ 写 `sync_runs(type=full)`。
+3. full：下载 zip → 校验大小 → 解压 → **流式**逐行解析（不全量入内存）→ 分批 upsert（默认 1000/批，`ON CONFLICT(zipcode,jis_code,town,town_kana)`）→ 可选剪除官方文件中已消失的地址（`SYNC_FULL_PRUNE`，行数低于 `SYNC_FULL_MIN_ROWS` 时跳过剪枝以防截断文件误删）→ 写 `sync_runs(type=full)`。
 4. diff：对**回看窗口** `SYNC_DIFF_LOOKBACK_MONTHS`（默认 3，含当月）内每个月份，下载 `utf_add_<YYMM>` / `utf_del_<YYMM>`，按时间升序应用——**先按废止文件 delete，再按新增文件 upsert**（保证"改名"=旧记录在 del + 新记录在 add 时最终留下新记录）。404 视为该月无差分并跳过。`diff_period` 记录最新已应用月份。
    - **差分入口不确定性与保守 fallback**：无法可靠得知"自上次同步以来应补哪几个月"。采用固定回看窗口而非精确游标——差分应用对 add（upsert 幂等）/ del（删不存在记 0）天然幂等，重复覆盖近几个月零副作用；窗口足够覆盖常规调度间隔。若窗口内**无任何**可用差分文件，则按 `SYNC_DIFF_FALLBACK_FULL`（默认 true）回退全量重建；关闭时记 `failed`（不破坏数据）。长期停机后建议直接全量（清空 `addresses` 即触发 auto-full）。
 5. 幂等：每行算 `source_hash`（仅对地址内容，不含更新区分/变更理由），key 已存在且 hash 相同则跳过（unchanged，不写库）；重跑计数确定、稳定。
+   - **逻辑唯一键 = `(zipcode, jis_code, town, town_kana)`**（决策 task-0004 review）。`town_kana` 是键的一部分：真实全量数据中同一 `(zipcode, jis_code, town)` 可对应多种合法读音（实测 `6730012/28203/和坂`：`カニガサカ` / `ワサカ`），并入 `town_kana` 后两行各自独立、不被唯一索引折叠、不丢记录，且同键两行落入同一 upsert 分块时不再触发 SQLite `ON CONFLICT ... cannot affect row a second time`。差分"改名/变更"仍由 del（旧记录，含旧 kana）+ add（新记录，含新 kana）表达，键变化时由删除+新增收敛，语义不变。
+   - **存量库迁移**：唯一索引 `uq_addr` 由 3 列扩为 4 列。GORM `AutoMigrate` 按索引**名**判断存在性、不比对列定义，故对已建过 3 列 `uq_addr` 的存量库不会自动重建——升级存量库需先手工 `DROP INDEX uq_addr` 再启动迁移，或直接清空 `addresses` 触发 auto-full 重建（推荐，邮编为可重导公开数据）。全新部署无需额外处理。
 6. 并发：DB 单行锁（`sync_locks`）保证同一时刻仅一个同步在写；并发触发返回 `sync_running`（HTTP 409）。锁含 TTL（2h），持有进程崩溃后可被抢占，避免永久阻塞。
 7. 失败：记录 `error_message`，分批写 + 删除走事务，不破坏既有数据，在线查询（读路径）不受影响。
 8. 健壮性：下载带单次超时 + 指数退避重试（`DOWNLOAD_*`）、大小校验、zip 完整性校验、记录 checksum/文件大小；DB 连接带超时 + 退避重试（`DB_*`）。
@@ -183,3 +185,4 @@
 | 2026-06-11 | 架构基线 | 初始 spec v1 |
 | 2026-06-11 | task-0004 | 实现同步引擎：核验真实数据源（§2 全量/差分 URL、UTF 格式与差分入口确认），落地 §4 同步行为（full/diff/幂等/调度/锁/fallback），扩充 §10 配置项；OpenAPI `SyncRun` 增补 source_url/file_checksum/file_size/diff_period/duration_ms |
 | 2026-06-11 | task-0006 | §3.5 token 增加 `ttl_seconds`/`expires_at` 与发行校验；§5 认证补充过期校验、401 不区分、安全错误约束、§5.1 认证边界表；§6 传输加密细化信封/密钥/错误处理/不适用场景。实现：`internal/domain`(Token+Repository)、`internal/auth`(service/中间件/管理端点/内存仓储)、`internal/crypto`(AES-256-GCM + 响应中间件)。 |
+| 2026-06-11 | GHO-33 (task-0004 review 收口) | 修复 review 三处缺陷：①差分窗口 `monthsWindow` 月末回退归一到月初，消除跳月/重复；②逻辑唯一键并入 `town_kana`（§2/§4 第 5 点），保留同键异读音、落库 124,511 条并消除同批 upsert 冲突，含存量库迁移说明；③同步锁 `release` 加 holder 校验，避免 TTL 抢占后误放他人锁。补单测覆盖三者；architecture §5.3 同步更新。 |

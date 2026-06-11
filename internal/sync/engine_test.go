@@ -33,10 +33,14 @@ func (f *fakeFetcher) Fetch(_ context.Context, url string) (*SourceFile, error) 
 const (
 	rowA = `01101,"060  ","0600000","ホッカイドウ","サッポロシチュウオウク","イカニケイサイガナイバアイ","北海道","札幌市中央区","以下に掲載がない場合",0,0,0,0,0,0`
 	rowB = `01101,"064  ","0640941","ホッカイドウ","サッポロシチュウオウク","アサヒガオカ","北海道","札幌市中央区","旭ケ丘",0,0,1,0,0,0`
-	// rowBmod 与 rowB 同键（zip/jis/town）但 kana 不同 → updated。
-	rowBmod = `01101,"064  ","0640941","ホッカイドウ","サッポロシチュウオウク","アサヒガオカニシ","北海道","札幌市中央区","旭ケ丘",0,0,1,0,1,3`
+	// rowBmod 与 rowB 同键（zip/jis/town/town_kana），仅 flag_multi_zip 变化 → updated。
+	rowBmod = `01101,"064  ","0640941","ホッカイドウ","サッポロシチュウオウク","アサヒガオカ","北海道","札幌市中央区","旭ケ丘",1,0,1,0,1,3`
 	rowC    = `15210,"948  ","9480013","ニイガタケン","トオカマチシ","カワハラチョウ","新潟県","十日町市","川原町",0,0,0,0,0,0`
 	rowD    = `23202,"444  ","4440819","アイチケン","オカザキシ","オカザキエキマエ","愛知県","岡崎市","岡崎駅前",0,0,1,0,1,5`
+	// rowKani / rowWasa：同一 (zip,jis,town)=6730012/28203/和坂 的两种合法读音，
+	// 真实全量数据存在此对（Finding 2），并入 town_kana 键后应各自独立落库。
+	rowKani = `28203,"673  ","6730012","ヒョウゴケン","アカシシ","カニガサカ","兵庫県","明石市","和坂",0,0,0,0,0,0`
+	rowWasa = `28203,"673  ","6730012","ヒョウゴケン","アカシシ","ワサカ","兵庫県","明石市","和坂",0,0,0,0,0,0`
 )
 
 func openTestStore(t *testing.T) *store.Store {
@@ -190,6 +194,71 @@ func TestEngineDiffFallbackToFull(t *testing.T) {
 	}
 	if run.Status != domain.StatusSuccess {
 		t.Errorf("status = %s", run.Status)
+	}
+}
+
+// TestEngineFullKeepsDistinctReadings 覆盖 Finding 2 的端到端路径：全量文件中同一
+// (zip,jis,town) 的两种读音（且落入同一 upsert 分块）应各自独立落库，不被折叠、
+// 不触发 SQLite "ON CONFLICT cannot affect row a second time"。
+func TestEngineFullKeepsDistinctReadings(t *testing.T) {
+	st := openTestStore(t)
+	// rowKani 与 rowWasa 相邻，BatchSize=2 使二者落入同一分块。
+	full := strings.Join([]string{rowKani, rowWasa, rowA}, "\n") + "\n"
+	e := newTestEngine(t, st, map[string]string{"full": full})
+
+	run, err := e.Run(context.Background(), domain.SyncFull, domain.TriggerManual)
+	if err != nil {
+		t.Fatalf("full run: %v", err)
+	}
+	if run.Status != domain.StatusSuccess {
+		t.Fatalf("status = %s, err = %s", run.Status, run.ErrorMessage)
+	}
+	if run.RowsAdded != 3 || run.RowsTotal != 3 {
+		t.Errorf("counts a=%d t=%d, want 3/3 (两读音各计一条)", run.RowsAdded, run.RowsTotal)
+	}
+	if got := count(t, st); got != 3 {
+		t.Fatalf("addresses = %d, want 3 (和坂两读音 + rowA)", got)
+	}
+
+	// 重跑全量 → 全部 unchanged，计数稳定（不再像旧键那样稳定记 updated≥1）。
+	run2, err := e.Run(context.Background(), domain.SyncFull, domain.TriggerManual)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run2.RowsUpdated != 0 || run2.RowsAdded != 0 || run2.RowsDeleted != 0 {
+		t.Errorf("rerun counts a=%d u=%d d=%d, want 0/0/0", run2.RowsAdded, run2.RowsUpdated, run2.RowsDeleted)
+	}
+}
+
+// TestMonthsWindow 覆盖 Finding 1：月末日期回退不得因短月归一化跳月/重复。
+func TestMonthsWindow(t *testing.T) {
+	cases := []struct {
+		name string
+		now  time.Time
+		n    int
+		want []string
+	}{
+		{"march31_back3", time.Date(2026, 3, 31, 0, 0, 0, 0, time.UTC), 3, []string{"2601", "2602", "2603"}},
+		{"may31_back3", time.Date(2026, 5, 31, 0, 0, 0, 0, time.UTC), 3, []string{"2603", "2604", "2605"}},
+		{"jan31_crossyear", time.Date(2026, 1, 31, 0, 0, 0, 0, time.UTC), 3, []string{"2511", "2512", "2601"}},
+		{"jan30_crossyear", time.Date(2026, 1, 30, 0, 0, 0, 0, time.UTC), 2, []string{"2512", "2601"}},
+		{"mar29_leapfeb", time.Date(2024, 3, 29, 0, 0, 0, 0, time.UTC), 2, []string{"2402", "2403"}},
+		{"mid_month", time.Date(2026, 6, 11, 0, 0, 0, 0, time.UTC), 3, []string{"2604", "2605", "2606"}},
+		{"single", time.Date(2026, 7, 31, 0, 0, 0, 0, time.UTC), 1, []string{"2607"}},
+		{"dec31", time.Date(2025, 12, 31, 0, 0, 0, 0, time.UTC), 4, []string{"2509", "2510", "2511", "2512"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := monthsWindow(c.now, c.n)
+			if len(got) != len(c.want) {
+				t.Fatalf("monthsWindow(%v,%d) = %v, want %v", c.now, c.n, got, c.want)
+			}
+			for i := range got {
+				if got[i] != c.want[i] {
+					t.Fatalf("monthsWindow(%v,%d) = %v, want %v", c.now, c.n, got, c.want)
+				}
+			}
+		})
 	}
 }
 

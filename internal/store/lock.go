@@ -48,8 +48,11 @@ func (l *dbLocker) Acquire(ctx context.Context, holder string) (func() error, bo
 		return nil, false, nil // 已被占用
 	}
 
+	// release 仅释放本持有者仍持有的锁：加 holder 条件，避免 TTL 抢占后原持有者的
+	// deferred release 误清掉新持有者的锁（否则会出现双写者）。条件不匹配时静默 no-op
+	// （RowsAffected=0 不视为错误——锁已不归我，无需释放）。
 	release := func() error {
-		return l.db.Model(&syncLockRow{}).Where("id = ?", lockID).
+		return l.db.Model(&syncLockRow{}).Where("id = ? AND holder = ?", lockID, holder).
 			Updates(map[string]any{"locked": false, "holder": ""}).Error
 	}
 	return release, true, nil
