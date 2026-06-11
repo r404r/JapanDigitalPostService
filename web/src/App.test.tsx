@@ -409,4 +409,26 @@ describe("App", () => {
     await userEvent.click(within(screen.getByRole("status")).getByRole("button", { name: "非表示" }));
     expect(screen.queryByText("jdps_plaintext_once")).not.toBeInTheDocument();
   });
+
+  it("groups token action buttons away from token inputs", async () => {
+    sessionStorage.setItem("apiToken", "admin-token");
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          total_addresses: 0,
+          running: false,
+          last_success_at: null,
+          last_type: null
+        })
+      )
+      .mockResolvedValueOnce(jsonResponse([]));
+
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "管理" }));
+    expect(await screen.findByText("Token 管理")).toBeInTheDocument();
+
+    const tokenActions = screen.getByRole("group", { name: "Token 操作" });
+    expect(within(tokenActions).getByRole("button", { name: "発行" })).toBeInTheDocument();
+    expect(within(tokenActions).getByRole("button", { name: "一覧更新" })).toBeInTheDocument();
+  });
 });

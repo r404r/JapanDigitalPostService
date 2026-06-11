@@ -323,12 +323,12 @@ function TokenPanel({ api, hasToken }: { api: ApiClient; hasToken: boolean }) {
 
   return (
     <section className="admin-section">
-      <form className="panel" onSubmit={create}>
+      <form className="panel token-form" onSubmit={create}>
         <div className="section-heading">
           <h2>Token 管理</h2>
           <p>明文 token は発行直後に一度だけ表示されます。</p>
         </div>
-        <div className="input-grid compact">
+        <div className="input-grid compact token-fields">
           <TextInput label="名前" value={form.name} onChange={(name) => setForm({ ...form, name })} />
           <label>
             <span>scope</span>
@@ -338,7 +338,7 @@ function TokenPanel({ api, hasToken }: { api: ApiClient; hasToken: boolean }) {
             </select>
           </label>
         </div>
-        <div className="actions">
+        <div className="actions token-actions" role="group" aria-label="Token 操作">
           <button type="submit" disabled={loading || !hasToken || !form.name.trim()}>
             発行
           </button>

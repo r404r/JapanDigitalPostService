@@ -166,7 +166,7 @@
 三个页面（最小可用）：
 1. **查询页**：输入邮编/都道府県/市区町村/关键字，展示结果表、OpenAPI 字段 `total_count` / `returned_count` / `items`，并可展示 `items.length` 作为本次返回地址数量；同时展示 `truncated`/`too_many_results`/`timeout` 状态提示。
 2. **同步状态页**：持有 Bearer token 时自动读取同步状态与运行历史；展示 `total_addresses`、最近成功同步时间/类型、是否运行中、最新 100 件运行历史（类型、状态、时间、`rows_total` 处理数量、错误摘要），可手动触发 auto/full/diff（admin）。清空 token 时同步状态与历史显示应一并清空，避免保留旧 token 读取到的信息。管理区 UI 将“状态再読込”和“同期実行”分成两个操作区域；`同期方式` 下拉框只影响其同组的「選択した方式で同期実行」按钮，状态再读取不受该选择影响。
-3. **Token 页**：发行 token（明文仅展示一次并提示保存）、脱敏列表、吊销（需 admin）。
+3. **Token 页**：发行 token（明文仅展示一次并提示保存）、脱敏列表、吊销（需 admin）。Token 管理表单将输入控件与操作按钮分为独立视觉/语义组，按钮区与输入区保持清晰间距。
 
 通用行为：
 - Bearer token 由用户输入，仅保存在浏览器 `sessionStorage`，不硬编码。
@@ -217,3 +217,4 @@
 | 2026-06-11 | task-0011 | React sample 管理页持有 token 时自动读取 `sync/status` 与最新 100 件 `sync/runs`，刷新/重新进入后从后端持久化 `sync_runs` 恢复同期履歴；清空 token 时清空同步状态与历史显示。无 OpenAPI 变更。 |
 | 2026-06-11 | task-0012 | 补充 `node_modules` 类目录 ignore、README 手工测试容器按最新代码重建 app 的步骤，并将 React sample 视觉调整为日本邮便番号検索风格。无 OpenAPI 变更。 |
 | 2026-06-11 | task-0013 | React sample 改用日文字体优先的本机字体栈，并将管理页同期操作拆成“状态再読込”和“選択した方式で同期実行”两个明确区域，消除下拉框适用范围歧义。无 OpenAPI 变更。 |
+| 2026-06-11 | task-0014 | 优化 React sample 管理页 Token 表单的输入区与按钮区间距，并将按钮声明为独立操作组，改善可扫读性。无 OpenAPI 变更。 |

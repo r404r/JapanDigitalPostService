@@ -243,11 +243,25 @@ h3 {
   max-width: 560px;
 }
 
+.token-form {
+  display: grid;
+  gap: 20px;
+}
+
+.token-fields {
+  align-items: start;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   align-items: center;
+}
+
+.token-actions {
+  margin-top: 6px;
+  padding-top: 2px;
 }
 
 .secondary-button {
