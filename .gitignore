@@ -30,3 +30,5 @@ web/*.tsbuildinfo
 .DS_Store
 .idea/
 .vscode/
+.claude/
+skills-lock.json
