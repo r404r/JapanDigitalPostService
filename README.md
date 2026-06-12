@@ -215,25 +215,56 @@ DB_DRIVER=mysql
 DB_DSN=postal:postal@tcp(mysql:3306)/postal?parseTime=true&charset=utf8mb4
 ```
 
-切换后重启应用：
+#### 配置变更 / 代码变更时如何重启
+
+`deployments/manual-test.compose.yml` 通过 `deployments/manual-test.env` 注入手工测试容器的运行时配置；根目录 `.env.example` 只是变量清单文档，不会被该 compose 文件自动读取。容器环境变量在容器创建时固定，所以修改 `deployments/manual-test.env` 后，需要重新创建 `app` 容器，但不需要重新构建镜像：
 
 ```bash
-docker compose -f deployments/manual-test.compose.yml up -d --build --force-recreate app
+docker compose -f deployments/manual-test.compose.yml up -d --no-build --force-recreate --no-deps app
 ```
 
-若手工测试容器已经在运行，并且只是想用当前工作区的最新代码重新构建 Go 后端与生产前端，不需要清理数据库 volume。执行：
+参数含义：
+
+- `--no-build`：只使用本地已有的 `deployments-app` 镜像，不触发 Dockerfile 构建，也不会访问 Docker Hub 拉取基础镜像 metadata。
+- `--force-recreate`：重新创建 `app` 容器，让新的 `env_file` 配置生效。
+- `--no-deps`：不重启 PostgreSQL / MySQL，避免无关服务抖动。
+
+修改 Go / React 源码时，需要重新构建 `app` 镜像（代码和前端生产构建会被写进镜像），但通常不需要重新拉基础镜像。推荐把 build 和容器重建分开：
 
 ```bash
 # 1) 查看当前容器状态
 docker compose -f deployments/manual-test.compose.yml ps
 
-# 2) 只重建并重启 app 服务；PG/MySQL 与 app-data volume 保持不变
-docker compose -f deployments/manual-test.compose.yml up -d --build --force-recreate app
+# 2) 只构建 app 镜像；不要加 --pull / --no-cache，尽量复用本地基础镜像与缓存层
+docker compose -f deployments/manual-test.compose.yml build app
 
-# 3) 确认 app 已恢复 healthy
+# 3) 用刚构建好的本地镜像重新创建 app 容器；PG/MySQL 与 app-data volume 保持不变
+docker compose -f deployments/manual-test.compose.yml up -d --no-build --force-recreate --no-deps app
+
+# 4) 确认 app 已恢复 healthy
 docker compose -f deployments/manual-test.compose.yml ps app
 curl http://localhost:8080/v1/health
 ```
+
+注意：
+
+- 如果只改 `deployments/manual-test.env` 这类运行时配置，不要使用 `--build`。
+- 如果改了 `web/package*.json`、`go.mod`、`go.sum`，构建阶段可能需要访问 npm / Go module 网络源。
+- 如果本机没有基础镜像，或 Docker cache 被清理过，构建仍可能访问 Docker Hub。网络可用时可预先拉取：
+
+```bash
+docker pull node:22-alpine
+docker pull golang:1.22-alpine
+docker pull alpine:3.20
+```
+
+可用下面命令确认基础镜像是否在本机：
+
+```bash
+docker image inspect node:22-alpine golang:1.22-alpine alpine:3.20
+```
+
+为尽量支持离线构建，避免执行 `docker system prune -a`、`docker builder prune`、`--no-cache`、`--pull` 等会清理缓存或强制联网的操作。
 
 如果启动时覆盖了宿主机端口，例如 `APP_HOST_PORT=18080`，健康检查也改为 `curl http://localhost:18080/v1/health`。完全重置数据时才使用下方 `down -v`。
 
