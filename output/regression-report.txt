@@ -8,12 +8,12 @@ RESULT: PASS
 	github.com/r404r/JapanDigitalPostService/internal/app		coverage: 0.0% of statements
 	github.com/r404r/JapanDigitalPostService/internal/domain		coverage: 0.0% of statements
 ?   	github.com/r404r/JapanDigitalPostService/internal/version	[no test files]
-ok  	github.com/r404r/JapanDigitalPostService/internal/auth	coverage: 73.0% of statements
+ok  	github.com/r404r/JapanDigitalPostService/internal/auth	coverage: 72.7% of statements
 ok  	github.com/r404r/JapanDigitalPostService/internal/config	coverage: 90.5% of statements
 ok  	github.com/r404r/JapanDigitalPostService/internal/crypto	coverage: 86.5% of statements
 ok  	github.com/r404r/JapanDigitalPostService/internal/e2e	coverage: 92.5% of statements
 ok  	github.com/r404r/JapanDigitalPostService/internal/query	coverage: 45.9% of statements
-ok  	github.com/r404r/JapanDigitalPostService/internal/server	coverage: 84.2% of statements
+ok  	github.com/r404r/JapanDigitalPostService/internal/server	coverage: 83.9% of statements
 ok  	github.com/r404r/JapanDigitalPostService/internal/settings	coverage: 59.6% of statements
 ok  	github.com/r404r/JapanDigitalPostService/internal/store	coverage: 82.7% of statements
 ok  	github.com/r404r/JapanDigitalPostService/internal/sync	coverage: 83.8% of statements
@@ -38,8 +38,8 @@ github.com/r404r/JapanDigitalPostService/internal/auth/http.go:119:			CreateToke
 github.com/r404r/JapanDigitalPostService/internal/auth/http.go:155:			ListTokens			66.7%
 github.com/r404r/JapanDigitalPostService/internal/auth/http.go:170:			RevokeToken			58.3%
 github.com/r404r/JapanDigitalPostService/internal/auth/http.go:189:			decodeJSON			100.0%
-github.com/r404r/JapanDigitalPostService/internal/auth/http.go:196:			writeJSON			100.0%
-github.com/r404r/JapanDigitalPostService/internal/auth/http.go:210:			writeError			100.0%
+github.com/r404r/JapanDigitalPostService/internal/auth/http.go:196:			writeJSON			75.0%
+github.com/r404r/JapanDigitalPostService/internal/auth/http.go:212:			writeError			100.0%
 github.com/r404r/JapanDigitalPostService/internal/auth/memstore.go:25:			NewMemoryStore			100.0%
 github.com/r404r/JapanDigitalPostService/internal/auth/memstore.go:32:			Create				100.0%
 github.com/r404r/JapanDigitalPostService/internal/auth/memstore.go:41:			GetByHash			100.0%
@@ -97,7 +97,7 @@ github.com/r404r/JapanDigitalPostService/internal/server/handlers.go:93:		search
 github.com/r404r/JapanDigitalPostService/internal/server/handlers.go:126:		getByZipcode			100.0%
 github.com/r404r/JapanDigitalPostService/internal/server/handlers.go:139:		writeError			100.0%
 github.com/r404r/JapanDigitalPostService/internal/server/handlers.go:154:		parseIntParam			100.0%
-github.com/r404r/JapanDigitalPostService/internal/server/handlers.go:166:		writeJSON			100.0%
+github.com/r404r/JapanDigitalPostService/internal/server/handlers.go:166:		writeJSON			75.0%
 github.com/r404r/JapanDigitalPostService/internal/server/middleware.go:20:		requestIDMiddleware		100.0%
 github.com/r404r/JapanDigitalPostService/internal/server/middleware.go:33:		requestIDFrom			66.7%
 github.com/r404r/JapanDigitalPostService/internal/server/middleware.go:40:		newRequestID			75.0%
@@ -206,4 +206,4 @@ github.com/r404r/JapanDigitalPostService/internal/sync/parser.go:101:			atoiFlag
 github.com/r404r/JapanDigitalPostService/internal/sync/scheduler.go:23:			NewScheduler			78.6%
 github.com/r404r/JapanDigitalPostService/internal/sync/scheduler.go:47:			Start				100.0%
 github.com/r404r/JapanDigitalPostService/internal/sync/scheduler.go:50:			Stop				100.0%
-total:											(statements)			78.4%
+total:											(statements)			78.3%

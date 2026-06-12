@@ -196,7 +196,9 @@ func decodeJSON(r *http.Request, v any) error {
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(v)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		slog.Error("writeJSON encode failed", "err", err)
+	}
 }
 
 // errorResponse 是 spec §7 的统一错误格式。message 必须是安全文案，

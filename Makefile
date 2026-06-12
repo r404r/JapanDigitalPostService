@@ -1,4 +1,22 @@
-.PHONY: build run test test-multidialect db-up db-down lint tidy sync-soul gen web-install web-dev web-build web-test ci openapi-lint regression-report
+.PHONY: help build run test test-multidialect db-up db-down lint tidy sync-soul gen web-install web-dev web-build web-test ci openapi-lint regression-report
+
+help:
+	@echo "Available targets:"
+	@echo "  build             build server and batch binaries"
+	@echo "  run               go run cmd/server"
+	@echo "  test              go test ./..."
+	@echo "  test-multidialect run store tests against PG + MySQL (needs docker)"
+	@echo "  db-up / db-down   start / stop PG + MySQL via docker compose"
+	@echo "  lint              gofmt + go vet"
+	@echo "  tidy              go mod tidy"
+	@echo "  web-install       npm install --prefix web"
+	@echo "  web-dev           npm run dev --prefix web"
+	@echo "  web-build         npm run build --prefix web"
+	@echo "  web-test          npm run test --prefix web"
+	@echo "  openapi-lint      validate api/openapi.yaml"
+	@echo "  sync-soul         check AGENTS.md == CLAUDE.md"
+	@echo "  ci                run full local CI"
+	@echo "  regression-report run tests and update output/regression-report.txt"
 
 build:
 	go build -o bin/server ./cmd/server

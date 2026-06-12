@@ -110,6 +110,21 @@ func runDialectSuite(t *testing.T, st *Store) {
 	if _, ok3, _ := l.Acquire(ctx, "h3"); !ok3 {
 		t.Fatal("acquire after release should succeed")
 	}
+
+	// 5) 陈旧锁（TTL 到期）被新持有者抢占。
+	if res := st.DB().Exec(
+		"UPDATE sync_locks SET acquired_at = ? WHERE id = ?",
+		time.Now().Add(-3*time.Hour), lockID,
+	); res.Error != nil {
+		t.Fatalf("backdate acquired_at: %v", res.Error)
+	}
+	_, okStale, errStale := l.Acquire(ctx, "h4")
+	if errStale != nil {
+		t.Fatalf("stale reclaim: unexpected error: %v", errStale)
+	}
+	if !okStale {
+		t.Fatal("stale reclaim: expected Acquire to succeed on expired lock, got false")
+	}
 }
 
 func TestPostgresDialect(t *testing.T) {

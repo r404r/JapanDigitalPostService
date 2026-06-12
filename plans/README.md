@@ -9,12 +9,12 @@ and update the Status column when done.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| [001](001-lock-release-context.md) | Fix lock `release` closure missing bounded context | P1 | S | — | TODO |
-| [002](002-ci-web-job.md) | Wire CI web job (frontend build + vitest) | P1 | S | — | TODO |
-| [003](003-stale-lock-ttl-test.md) | Test stale-lock TTL reclamation | P1 | S | 001 | TODO |
-| [004](004-like-escape-test.md) | Test LIKE `_` and `\` literal escape | P2 | S | — | TODO |
-| [005](005-ci-caching.md) | Add Go module & npm caching to CI | P2 | M | 002 | TODO |
-| [006](006-dx-polish.md) | DX polish: STATIC_DIR env doc + make help + writeJSON logging | P2 | S | — | TODO |
+| [001](001-lock-release-context.md) | Fix lock `release` closure missing bounded context | P1 | S | — | DONE (已由当前 main 上游实现) |
+| [002](002-ci-web-job.md) | Wire CI web job (frontend build + vitest) | P1 | S | — | DONE |
+| [003](003-stale-lock-ttl-test.md) | Test stale-lock TTL reclamation | P1 | S | 001 | DONE |
+| [004](004-like-escape-test.md) | Test LIKE `_` and `\` literal escape | P2 | S | — | DONE |
+| [005](005-ci-caching.md) | Add Go module & npm caching to CI | P2 | M | 002 | DONE |
+| [006](006-dx-polish.md) | DX polish: STATIC_DIR env doc + make help + writeJSON logging | P2 | S | — | DONE |
 
 Status values: `TODO` | `IN PROGRESS` | `DONE` | `BLOCKED (<reason>)` | `REJECTED (<rationale>)`
 

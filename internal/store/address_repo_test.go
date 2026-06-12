@@ -150,6 +150,36 @@ func TestSearch_LikeWildcardEscaped(t *testing.T) {
 	}
 }
 
+func TestSearch_LikeUnderscoreEscaped(t *testing.T) {
+	db := newTestDB(t)
+	insert(t, db, domain.Address{Zipcode: "1000001", City: "千代_区"})
+	insert(t, db, domain.Address{Zipcode: "2000001", City: "千代田区"})
+	repo := NewAddressReadRepo(db)
+	// "_" 作为字面量应转义，只命中含下划线的记录。
+	_, total, err := repo.Search(context.Background(), domain.AddressQuery{City: "千代_区", Limit: 20})
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+	if total != 1 {
+		t.Errorf("escaped _ matched %d rows, want 1", total)
+	}
+}
+
+func TestSearch_LikeBackslashEscaped(t *testing.T) {
+	db := newTestDB(t)
+	insert(t, db, domain.Address{Zipcode: "3000001", City: `千代\区`})
+	insert(t, db, domain.Address{Zipcode: "4000001", City: "千代田区"})
+	repo := NewAddressReadRepo(db)
+	// "\" 作为字面量应转义，不影响其他行。
+	_, total, err := repo.Search(context.Background(), domain.AddressQuery{City: `千代\区`, Limit: 20})
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+	if total != 1 {
+		t.Errorf("escaped \\ matched %d rows, want 1", total)
+	}
+}
+
 // TestSearch_ContextCancel 验证 ctx 取消会透传到 DB 驱动并令查询失败，
 // 证明请求不会无限占用数据库连接。
 func TestSearch_ContextCancel(t *testing.T) {
