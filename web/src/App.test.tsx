@@ -20,6 +20,45 @@ const settingsBody = (overrides: Partial<Record<"download_max_retry" | "scrape_f
     }
 });
 
+const payloadEncKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
+const fixedNonce = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+
+const encryptedJsonResponse = async (body: unknown, init: ResponseInit = {}) => {
+  const key = await crypto.subtle.importKey("raw", base64ToBytes(payloadEncKey), "AES-GCM", false, ["encrypt"]);
+  const plaintext = new TextEncoder().encode(JSON.stringify(body));
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv: fixedNonce }, key, plaintext);
+
+  return new Response(
+    JSON.stringify({
+      enc: "AES-256-GCM",
+      kid: "k1",
+      nonce: bytesToBase64(fixedNonce),
+      ciphertext: bytesToBase64(new Uint8Array(ciphertext))
+    }),
+    {
+      status: init.status ?? 200,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Payload-Encryption": "AES-256-GCM"
+      },
+      ...init
+    }
+  );
+};
+
+function base64ToBytes(value: string) {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+function bytesToBase64(bytes: Uint8Array) {
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary);
+}
+
 describe("App", () => {
   beforeEach(() => {
     sessionStorage.clear();
@@ -66,6 +105,57 @@ describe("App", () => {
         headers: expect.any(Headers)
       })
     );
+  });
+
+  it("decrypts encrypted API responses after configuring the AES-GCM key", async () => {
+    sessionStorage.setItem("apiToken", "read-token");
+    vi.mocked(fetch).mockResolvedValueOnce(
+      await encryptedJsonResponse({
+        status: "ok",
+        total_count: 1,
+        returned_count: 1,
+        truncated: false,
+        items: [
+          {
+            zipcode: "1000001",
+            prefecture: "東京都",
+            city: "千代田区",
+            town: "千代田",
+            prefecture_kana: "トウキョウト",
+            city_kana: "チヨダク",
+            town_kana: "チヨダ"
+          }
+        ]
+      })
+    );
+
+    render(<App />);
+    await userEvent.type(screen.getByLabelText("API 暗号化 key"), payloadEncKey);
+    await userEvent.type(screen.getByLabelText("郵便番号"), "1000001");
+    await userEvent.click(screen.getByRole("button", { name: "検索実行" }));
+
+    expect(await screen.findByText("東京都")).toBeInTheDocument();
+    expect(screen.getByText("total_count")).toBeInTheDocument();
+    expect(sessionStorage.getItem("payloadEncryptionKey")).toBe(payloadEncKey);
+  });
+
+  it("shows guidance when encrypted API responses arrive without a configured key", async () => {
+    sessionStorage.setItem("apiToken", "read-token");
+    vi.mocked(fetch).mockResolvedValueOnce(
+      await encryptedJsonResponse({
+        status: "ok",
+        total_count: 1,
+        returned_count: 1,
+        truncated: false,
+        items: []
+      })
+    );
+
+    render(<App />);
+    await userEvent.type(screen.getByLabelText("郵便番号"), "1000001");
+    await userEvent.click(screen.getByRole("button", { name: "検索実行" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("AES-GCM key");
   });
 
   it("shows authentication failures clearly", async () => {

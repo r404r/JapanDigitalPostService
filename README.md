@@ -175,6 +175,9 @@ npm run dev --prefix web     # http://localhost:5173（dev server 代理后端 :
 
 画面包含：地址查询页（read token），后台管理区——触发同步（自动 / 强制全量 / 强制差分）、
 同步状态与历史、token 发行/管理（admin token）。明文 token 仅创建时展示一次，前端只存于 sessionStorage。
+当后端以 `PAYLOAD_ENCRYPTION=aes-gcm` 启动时，页面右上角的 `API 暗号化 key` 输入框填写同一个
+base64(32B) `PAYLOAD_ENC_KEY`，前端会按 `X-Payload-Encryption: AES-256-GCM` 响应头自动解密 JSON 信封；
+该 key 同样只保存在当前浏览器 `sessionStorage`。
 截图付き操作说明见 [`docs/guide/`](docs/guide/)。
 
 ### 6. 全功能手工测试（容器）

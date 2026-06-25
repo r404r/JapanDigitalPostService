@@ -96,10 +96,21 @@ export type ApiError = {
   httpStatus?: number;
 };
 
+type PayloadEnvelope = {
+  enc?: unknown;
+  nonce?: unknown;
+  ciphertext?: unknown;
+};
+
+const payloadEncryptionHeader = "X-Payload-Encryption";
+const payloadEncryptionAlgo = "AES-256-GCM";
+const payloadEncryptionKeyBytes = 32;
+
 export class ApiClient {
   constructor(
     private readonly getToken: () => string,
-    private readonly baseUrl = "/v1"
+    private readonly baseUrl = "/v1",
+    private readonly getPayloadEncryptionKey: () => string = () => ""
   ) {}
 
   searchAddresses(params: Record<string, string>) {
@@ -194,7 +205,7 @@ export class ApiClient {
 
     const contentType = response.headers.get("Content-Type") ?? "";
     const payload = contentType.includes("application/json")
-      ? await response.json()
+      ? await this.readJSONPayload(response)
       : null;
 
     if (!response.ok) {
@@ -203,6 +214,66 @@ export class ApiClient {
 
     return payload as T;
   }
+
+  private async readJSONPayload(response: Response) {
+    const payload: unknown = await response.json();
+    if (response.headers.get(payloadEncryptionHeader) !== payloadEncryptionAlgo) {
+      return payload;
+    }
+    return decryptPayloadEnvelope(payload, this.getPayloadEncryptionKey().trim(), response.status);
+  }
+}
+
+async function decryptPayloadEnvelope(payload: unknown, keyB64: string, httpStatus?: number) {
+  if (!keyB64) {
+    throw payloadEncryptionError(
+      "暗号化された API レスポンスを復号できません。API 暗号化 key に AES-GCM key を入力してください。",
+      httpStatus
+    );
+  }
+  if (!globalThis.crypto?.subtle) {
+    throw payloadEncryptionError("このブラウザーは AES-GCM 復号に対応していません。", httpStatus);
+  }
+
+  const envelope = payload as PayloadEnvelope;
+  if (
+    !envelope ||
+    typeof envelope !== "object" ||
+    envelope.enc !== payloadEncryptionAlgo ||
+    typeof envelope.nonce !== "string" ||
+    typeof envelope.ciphertext !== "string"
+  ) {
+    throw payloadEncryptionError("暗号化された API レスポンスの形式が不正です。", httpStatus);
+  }
+
+  try {
+    const keyBytes = base64ToBytes(keyB64);
+    if (keyBytes.length !== payloadEncryptionKeyBytes) {
+      throw new Error("invalid key length");
+    }
+    const cryptoKey = await globalThis.crypto.subtle.importKey("raw", keyBytes, "AES-GCM", false, ["decrypt"]);
+    const plaintext = await globalThis.crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: base64ToBytes(envelope.nonce) },
+      cryptoKey,
+      base64ToBytes(envelope.ciphertext)
+    );
+    return JSON.parse(new TextDecoder().decode(plaintext));
+  } catch {
+    throw payloadEncryptionError("API レスポンスの復号に失敗しました。AES-GCM key を確認してください。", httpStatus);
+  }
+}
+
+function payloadEncryptionError(message: string, httpStatus?: number): ApiError {
+  return {
+    status: "invalid_request",
+    message,
+    httpStatus
+  };
+}
+
+function base64ToBytes(value: string) {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
 }
 
 export function normalizeError(payload: unknown, httpStatus?: number): ApiError {
