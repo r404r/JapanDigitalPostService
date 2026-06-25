@@ -18,7 +18,11 @@ type Page = "search" | "admin";
 export default function App() {
   const [page, setPage] = useState<Page>("search");
   const [token, setToken] = useState(() => sessionStorage.getItem("apiToken") ?? "");
-  const api = useMemo(() => new ApiClient(() => token), [token]);
+  const [payloadEncryptionKey, setPayloadEncryptionKey] = useState(() => sessionStorage.getItem("payloadEncryptionKey") ?? "");
+  const api = useMemo(
+    () => new ApiClient(() => token, "/v1", () => payloadEncryptionKey),
+    [token, payloadEncryptionKey]
+  );
 
   const updateToken = (value: string) => {
     setToken(value);
@@ -29,6 +33,15 @@ export default function App() {
     }
   };
 
+  const updatePayloadEncryptionKey = (value: string) => {
+    setPayloadEncryptionKey(value);
+    if (value.trim()) {
+      sessionStorage.setItem("payloadEncryptionKey", value);
+    } else {
+      sessionStorage.removeItem("payloadEncryptionKey");
+    }
+  };
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -36,16 +49,28 @@ export default function App() {
           <p className="eyebrow">React sample</p>
           <h1>JapanDigitalPostService</h1>
         </div>
-        <label className="token-field">
-          <span>Bearer token</span>
-          <input
-            value={token}
-            onChange={(event) => updateToken(event.target.value)}
-            placeholder="admin/read token"
-            type="password"
-            autoComplete="off"
-          />
-        </label>
+        <div className="credential-fields">
+          <label className="token-field">
+            <span>Bearer token</span>
+            <input
+              value={token}
+              onChange={(event) => updateToken(event.target.value)}
+              placeholder="admin/read token"
+              type="password"
+              autoComplete="off"
+            />
+          </label>
+          <label className="token-field">
+            <span>API 暗号化 key</span>
+            <input
+              value={payloadEncryptionKey}
+              onChange={(event) => updatePayloadEncryptionKey(event.target.value)}
+              placeholder="base64 32B key"
+              type="password"
+              autoComplete="off"
+            />
+          </label>
+        </div>
       </header>
 
       <nav className="tabs" aria-label="Sample pages">

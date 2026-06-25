@@ -192,6 +192,7 @@
 
 通用行为：
 - Bearer token 由用户输入，仅保存在浏览器 `sessionStorage`，不硬编码。
+- 可选应用层加密由响应头自动判定：当后端返回 `X-Payload-Encryption: AES-256-GCM` 时，React sample 使用页面 `API 暗号化 key` 输入框中的 base64(32B) AES-GCM key 解密 `enc/kid/nonce/ciphertext` 信封，再按原 API JSON schema 渲染；该 key 仅保存在 `sessionStorage`。缺失或错误 key 显示解密错误，不把信封当作业务响应渲染。
 - timeout、认证失败、权限不足、结果过多、0 结果、服务错误均显示明确 UI 状态。
 - sample UI 保持轻量，不承担完整后台产品化能力。
 
@@ -259,3 +260,4 @@
 | 2026-06-11 | task-0025 | 修复 Claude Review #10：`DeleteNotIn` 改为按 id 分页扫描与分批剪枝，避免长游标跨 DELETE 阶段，并减少一次性 stale id 内存占用。无 OpenAPI 变更。 |
 | 2026-06-12 | GHO-40 | 强化 task 收口制度：文档影响判定纳入 `docs/guide/`，单元测试制度明确 Given/When/Then、mock/fake/stub、公开行为与新增/变更代码测试要求；新增 `make regression-report` 与 `output/regression-report.txt` 纯文本回归/覆盖率摘要管道。无 OpenAPI 变更。 |
 | 2026-06-12 | GHO-41 (WP1) | 新增运行时抓取设置持久化与管理 API：`runtime_settings` 表（三方言 GORM AutoMigrate + `migrations/0002_*`），`download_max_retry`（默认 3，0–10）与 `scrape_full_url`（默认=当前全量 URL，https+日本邮便域名白名单 SSRF 校验、日语提示）可在管理画面配置且重启后保留；新增 `GET/PUT /v1/admin/settings`（admin），「恢复默认」用删除覆盖语义。引擎/fetcher 改为每次同步前解析有效配置（DB>env>默认，§3.6 / architecture §9.1），batch/手动触发/调度三路径无需重启即生效；上传路径不发起下载、不受影响。OpenAPI 增补 `/admin/settings` 与 `AdminSettings`/`AdminSettingsUpdate` schema。 |
+| 2026-06-25 | GHO-97 | React sample 支持后端 `PAYLOAD_ENCRYPTION=aes-gcm`：页面新增 `API 暗号化 key`（sessionStorage），前端按 `X-Payload-Encryption: AES-256-GCM` 响应头解密 AES-GCM 信封后再解析业务 JSON；缺失/错误 key 显示明确错误。后端 API 契约沿用 §6 信封，无需新增端点。 |

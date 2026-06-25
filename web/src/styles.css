@@ -97,7 +97,7 @@ label span {
 
 .topbar {
   display: grid;
-  grid-template-columns: 1fr minmax(260px, 420px);
+  grid-template-columns: minmax(260px, 1fr) minmax(420px, 680px);
   gap: 24px;
   align-items: end;
   padding: 0 0 28px;
@@ -147,6 +147,13 @@ h3 {
 }
 
 .token-field {
+  min-width: 0;
+}
+
+.credential-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
   min-width: 0;
 }
 
@@ -557,6 +564,10 @@ th {
   .topbar {
     grid-template-columns: 1fr;
     gap: 16px;
+  }
+
+  .credential-fields {
+    grid-template-columns: 1fr;
   }
 
   h1 {
