@@ -8,15 +8,15 @@ RESULT: PASS
 	github.com/r404r/JapanDigitalPostService/internal/app		coverage: 0.0% of statements
 	github.com/r404r/JapanDigitalPostService/internal/domain		coverage: 0.0% of statements
 ?   	github.com/r404r/JapanDigitalPostService/internal/version	[no test files]
-ok  	github.com/r404r/JapanDigitalPostService/internal/auth	coverage: 82.7% of statements
+ok  	github.com/r404r/JapanDigitalPostService/internal/auth	coverage: 72.7% of statements
 ok  	github.com/r404r/JapanDigitalPostService/internal/config	coverage: 90.5% of statements
 ok  	github.com/r404r/JapanDigitalPostService/internal/crypto	coverage: 86.5% of statements
-ok  	github.com/r404r/JapanDigitalPostService/internal/e2e	coverage: [no statements]
-ok  	github.com/r404r/JapanDigitalPostService/internal/query	coverage: 86.7% of statements
-ok  	github.com/r404r/JapanDigitalPostService/internal/server	coverage: 82.9% of statements
-ok  	github.com/r404r/JapanDigitalPostService/internal/settings	coverage: 94.2% of statements
-ok  	github.com/r404r/JapanDigitalPostService/internal/store	coverage: 83.9% of statements
-ok  	github.com/r404r/JapanDigitalPostService/internal/sync	coverage: 84.8% of statements
+ok  	github.com/r404r/JapanDigitalPostService/internal/e2e	coverage: 92.5% of statements
+ok  	github.com/r404r/JapanDigitalPostService/internal/query	coverage: 45.9% of statements
+ok  	github.com/r404r/JapanDigitalPostService/internal/server	coverage: 83.9% of statements
+ok  	github.com/r404r/JapanDigitalPostService/internal/settings	coverage: 59.6% of statements
+ok  	github.com/r404r/JapanDigitalPostService/internal/store	coverage: 82.7% of statements
+ok  	github.com/r404r/JapanDigitalPostService/internal/sync	coverage: 83.8% of statements
 
 == 覆盖率（go tool cover -func）==
 github.com/r404r/JapanDigitalPostService/cmd/batch/main.go:21:				main				0.0%
@@ -72,15 +72,15 @@ github.com/r404r/JapanDigitalPostService/internal/crypto/middleware.go:61:		Head
 github.com/r404r/JapanDigitalPostService/internal/crypto/middleware.go:63:		WriteHeader			75.0%
 github.com/r404r/JapanDigitalPostService/internal/crypto/middleware.go:71:		Write				100.0%
 github.com/r404r/JapanDigitalPostService/internal/crypto/middleware.go:78:		copyHeader			100.0%
-github.com/r404r/JapanDigitalPostService/internal/domain/address.go:38:			TableName			0.0%
-github.com/r404r/JapanDigitalPostService/internal/domain/address.go:53:			Key				0.0%
-github.com/r404r/JapanDigitalPostService/internal/domain/address.go:60:			ComputeHash			0.0%
-github.com/r404r/JapanDigitalPostService/internal/domain/settings.go:29:		TableName			0.0%
-github.com/r404r/JapanDigitalPostService/internal/domain/syncrun.go:54:			TableName			0.0%
-github.com/r404r/JapanDigitalPostService/internal/domain/token.go:19:			Valid				0.0%
-github.com/r404r/JapanDigitalPostService/internal/domain/token.go:25:			Satisfies			0.0%
-github.com/r404r/JapanDigitalPostService/internal/domain/token.go:59:			TableName			0.0%
-github.com/r404r/JapanDigitalPostService/internal/domain/token.go:62:			Active				0.0%
+github.com/r404r/JapanDigitalPostService/internal/domain/address.go:38:			TableName			100.0%
+github.com/r404r/JapanDigitalPostService/internal/domain/address.go:53:			Key				100.0%
+github.com/r404r/JapanDigitalPostService/internal/domain/address.go:60:			ComputeHash			100.0%
+github.com/r404r/JapanDigitalPostService/internal/domain/settings.go:29:		TableName			100.0%
+github.com/r404r/JapanDigitalPostService/internal/domain/syncrun.go:54:			TableName			100.0%
+github.com/r404r/JapanDigitalPostService/internal/domain/token.go:19:			Valid				100.0%
+github.com/r404r/JapanDigitalPostService/internal/domain/token.go:25:			Satisfies			100.0%
+github.com/r404r/JapanDigitalPostService/internal/domain/token.go:59:			TableName			100.0%
+github.com/r404r/JapanDigitalPostService/internal/domain/token.go:62:			Active				85.7%
 github.com/r404r/JapanDigitalPostService/internal/query/service.go:48:			Error				0.0%
 github.com/r404r/JapanDigitalPostService/internal/query/service.go:69:			NewService			60.0%
 github.com/r404r/JapanDigitalPostService/internal/query/service.go:80:			Search				88.9%
@@ -206,4 +206,4 @@ github.com/r404r/JapanDigitalPostService/internal/sync/parser.go:101:			atoiFlag
 github.com/r404r/JapanDigitalPostService/internal/sync/scheduler.go:23:			NewScheduler			78.6%
 github.com/r404r/JapanDigitalPostService/internal/sync/scheduler.go:47:			Start				100.0%
 github.com/r404r/JapanDigitalPostService/internal/sync/scheduler.go:50:			Stop				100.0%
-total:											(statements)			75.9%
+total:											(statements)			78.3%

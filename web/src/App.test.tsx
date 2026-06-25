@@ -21,6 +21,7 @@ const settingsBody = (overrides: Partial<Record<"download_max_retry" | "scrape_f
 });
 
 const payloadEncKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
+const wrongPayloadEncKey = "YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODk=";
 const fixedNonce = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
 
 const encryptedJsonResponse = async (body: unknown, init: ResponseInit = {}) => {
@@ -156,6 +157,47 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("button", { name: "検索実行" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("AES-GCM key");
+  });
+
+  it("shows a decrypt failure when the configured AES-GCM key does not match", async () => {
+    sessionStorage.setItem("apiToken", "read-token");
+    sessionStorage.setItem("payloadEncryptionKey", wrongPayloadEncKey);
+    vi.mocked(fetch).mockResolvedValueOnce(
+      await encryptedJsonResponse({
+        status: "ok",
+        total_count: 1,
+        returned_count: 1,
+        truncated: false,
+        items: []
+      })
+    );
+
+    render(<App />);
+    await userEvent.type(screen.getByLabelText("郵便番号"), "1000001");
+    await userEvent.click(screen.getByRole("button", { name: "検索実行" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("復号に失敗しました");
+  });
+
+  it("decrypts encrypted API error responses before showing the structured error", async () => {
+    sessionStorage.setItem("apiToken", "bad-token");
+    sessionStorage.setItem("payloadEncryptionKey", payloadEncKey);
+    vi.mocked(fetch).mockResolvedValueOnce(
+      await encryptedJsonResponse(
+        {
+          status: "unauthorized",
+          message: "token is invalid"
+        },
+        { status: 401 }
+      )
+    );
+
+    render(<App />);
+    await userEvent.type(screen.getByLabelText("都道府県"), "東京");
+    await userEvent.click(screen.getByRole("button", { name: "検索実行" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("unauthorized");
+    expect(screen.getByRole("alert")).toHaveTextContent("token is invalid");
   });
 
   it("shows authentication failures clearly", async () => {
