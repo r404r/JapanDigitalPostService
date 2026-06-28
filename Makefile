@@ -83,4 +83,4 @@ ci:
 
 # 回归测试 report：跑全量测试 + 覆盖率，写 output/regression-report.txt（纳入 git）。
 regression-report:
-	./scripts/regression-report.sh
+	bash scripts/regression-report.sh

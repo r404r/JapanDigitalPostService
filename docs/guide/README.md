@@ -105,27 +105,30 @@ Vite 画面默认在 `http://localhost:5173`，并通过 `/v1` 代理到本机 `
 
 - 显示最新 100 件持久化同步记录。
 - 浏览器刷新后，持有 token 时会从后端重新读取，不依赖前端内存。
-- `processed` 显示本次处理行数；`error` 显示失败摘要，成功时通常为 `-`。
+- `processed` 显示本次处理行数；`skipped` 显示按町域名过滤正则跳过的行数；`error` 显示失败摘要，成功时通常为 `-`。
+- 当 `skipped` 大于 0 时，点击「除外行を表示」可在下方查看该次同步的过滤明细。
+- 过滤明细默认读取 100 条；若还有更多，点击「さらに読み込む」继续分页读取。
+- 明细表包含 source、line、zipcode、prefecture / city / town、town_kana、pattern、raw。`raw_record_json` 默认截断显示，点击「raw を表示」可展开完整 JSON，再点击「raw を隠す」收起。
 
-### 4.1 抓取设置（当前 Web：重试次数 / 全量 URL）
+### 4.1 抓取/导入设置（重试次数 / 全量 URL / 町域名フィルター）
 
-抓取行为可在线配置，**重启后保留**：
+抓取/导入行为可在线配置，**重启后保留**：
 
 - **网络重试次数**（`download_max_retry`，默认 `3`）：从日本邮便网站抓取数据遇到网络问题时的额外重试次数（有效范围 0–10）。
 - **全量抓取 URL**（`scrape_full_url`，默认 = 配置文件中的官网全量 URL）：可改写为日本邮便官方域名（`post.japanpost.jp`）下的其它 https 地址；提供「恢复默认」恢复为默认 URL。
+- **町域名过滤正则**（`town_skip_regex`，默认空）：按町域名匹配导入行，命中时该行不写入地址主表，并记录到过滤明细。该字段使用后端 Go 正则校验，前端不会用 JavaScript 正则提前阻止保存。
 - 优先级：管理画面配置（持久化于 DB）> 环境变量 > 代码默认；改动在**下一次同步**（自动调度 / 手动触发 / `cmd/batch`）即生效，无需重启。
-- URL 校验、错误提示与保存成功提示均为日语；非 https 或非官方域名的 URL 会被拒绝。
+- URL / 正则校验、错误提示与保存成功提示均为日语；非 https、官方域名外 URL 或非法 Go 正则会被拒绝。
 
 画面操作：
 
 1. 在「リトライ回数」中输入 0 到 10 的整数。超出范围或不是整数时，画面显示「リトライ回数は 0 以上 10 以下の整数で指定してください。」，且不会保存。
 2. 在「全量取得 URL」中输入日本邮政官方域名（`post.japanpost.jp` / `www.post.japanpost.jp`）的 https URL。非 https 或官方域名外的 URL 会被日语错误提示拒绝。
-3. 点击「保存」后，成功时画面显示「設定を保存しました。」，保存到 DB 的值会用于后续同步。
-4. 点击「既定値に戻す」后，`download_max_retry` 与 `scrape_full_url` 的覆盖值会被删除，并恢复为默认值。
+3. 在「町域名フィルター」中输入町域名过滤用 Go 正则；留空表示关闭过滤。后端校验失败时，画面显示「町域名フィルターの正規表現が正しくありません。」。
+4. 点击「保存」后，成功时画面显示「設定を保存しました。」，保存到 DB 的值会用于后续同步或上传导入。
+5. 点击「既定値に戻す」后，`download_max_retry`、`scrape_full_url` 与 `town_skip_regex` 的覆盖值会被删除，并恢复为默认值。
 
 后端 API：`GET /v1/admin/settings` / `PUT /v1/admin/settings`（均需 `admin` token，契约见 [`docs/api/v1.md`](../api/v1.md)）。
-
-> 现状说明：后端已支持第三个设置项 `town_skip_regex`，用于按町域名正则跳过导入行，并会把跳过明细写入 `sync_skipped_rows`。当前 Web 页面尚未提供该输入框和过滤履历查看入口；Web 接入方案见 [`task-0030`](../tasks/task-0030-web-import-filter-settings-and-skipped-history.md)。在该 task 实施前，可直接调用 Settings API 配置 `town_skip_regex`，并通过 `GET /v1/sync/runs/{id}/skipped` 查看明细。
 
 ### 4.2 文件上传（ファイルアップロード）
 
@@ -164,6 +167,8 @@ Token 一覧：
 | 页面提示 `401` | 确认右上角已填写 token 本体，且没有输入 `Bearer ` 前缀。 |
 | 页面提示 `403` | 当前 token 权限不足；同步执行和 token 管理需要 admin token。 |
 | 同步触发返回 `sync_running` | 已有同步正在执行；等待结束后点击「状態を再読込」。 |
+| 「町域名フィルター」保存失败 | 确认输入是 Go 正则；例如 Go 支持的 `(?i)町域` 可以保存，非法写法会显示后端返回的日语错误。 |
+| 同期履歴没有「除外行を表示」 | 该 run 的 `rows_skipped` 为 0；只有实际跳过过导入行的 run 才显示过滤明细入口。 |
 | 查询结果过多 | 增加邮编、都道府県、市区町村或关键字条件。 |
 | 新 token 明文丢失 | 服务端只保存 hash，无法找回；用已有 admin token 重新发行。 |
 | 刷新后 Bearer token 消失 | token 存在 `sessionStorage`；新浏览器会话需要重新输入。 |

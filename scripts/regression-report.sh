@@ -12,8 +12,33 @@ mkdir -p output
 COVER=output/coverage.out
 REPORT=output/regression-report.txt
 
-test_out=$(go test ./... -coverprofile="$COVER" 2>&1)
-code=$?
+find_go() {
+	if command -v go >/dev/null 2>&1; then
+		command -v go
+		return 0
+	fi
+	for drive in /c /d /e; do
+		for candidate in \
+			"$drive/scoop/apps/shims/go.exe" \
+			"$drive/scoop/shims/go.exe" \
+			"$drive/Program Files/Go/bin/go.exe"; do
+			if [ -x "$candidate" ]; then
+				printf '%s\n' "$candidate"
+				return 0
+			fi
+		done
+	done
+	return 1
+}
+
+GO_BIN=$(find_go)
+if [ -z "${GO_BIN:-}" ]; then
+	test_out="go: command not found"
+	code=127
+else
+	test_out=$("$GO_BIN" test ./... -coverprofile="$COVER" 2>&1)
+	code=$?
+fi
 
 {
 	echo "JapanDigitalPostService 回归测试 report"
@@ -29,9 +54,9 @@ code=$?
 	# 计时漂移或包构建完成顺序变化产生噪声 diff。覆盖率百分比保留（随代码变化属预期信号）。
 	echo "$test_out" | sed -E 's/[[:space:]]+[0-9]+\.[0-9]+s//g; s/[[:space:]]*\(cached\)//g' | LC_ALL=C sort
 	echo
-	if [ -f "$COVER" ]; then
+	if [ -n "${GO_BIN:-}" ] && [ -f "$COVER" ]; then
 		echo "== 覆盖率（go tool cover -func）=="
-		go tool cover -func="$COVER"
+		"$GO_BIN" tool cover -func="$COVER"
 	fi
 } >"$REPORT"
 

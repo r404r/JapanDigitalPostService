@@ -354,7 +354,7 @@ h3 {
 }
 
 .settings-grid {
-  grid-template-columns: minmax(140px, 220px) minmax(320px, 1fr);
+  grid-template-columns: minmax(140px, 220px) minmax(320px, 1fr) minmax(260px, 0.8fr);
 }
 
 label small {
@@ -510,6 +510,104 @@ label small {
   overflow-x: auto;
 }
 
+.table-action {
+  min-height: 36px;
+  border-radius: 6px;
+  padding: 0 12px;
+  font-size: 0.84rem;
+  line-height: 1.2;
+}
+
+.table-action[aria-pressed="true"] {
+  border-color: #87b4cc;
+  color: var(--cta);
+  background: #eff6ff;
+}
+
+.table-action[aria-pressed="true"]:hover:not(:disabled) {
+  color: #ffffff;
+}
+
+.skipped-count {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.skipped-rows-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.skipped-rows-heading {
+  display: flex;
+  gap: 16px;
+  align-items: start;
+  justify-content: space-between;
+}
+
+.skipped-rows-heading h3 {
+  margin-bottom: 8px;
+}
+
+.skipped-rows-heading .secondary-button {
+  flex: 0 0 auto;
+}
+
+.skipped-rows-table {
+  min-width: 980px;
+}
+
+.skipped-rows-table th:nth-child(2),
+.skipped-rows-table td:nth-child(2) {
+  width: 72px;
+}
+
+.skipped-rows-table th:nth-child(3),
+.skipped-rows-table td:nth-child(3) {
+  width: 112px;
+}
+
+.skipped-row-raw {
+  display: grid;
+  gap: 8px;
+  max-width: 420px;
+}
+
+.skipped-row-raw code {
+  display: block;
+  overflow-wrap: anywhere;
+  border: 1px solid rgba(5, 47, 69, 0.14);
+  border-radius: 6px;
+  padding: 8px;
+  background: #f8fbfc;
+  color: var(--ink);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+.skipped-row-raw.expanded code {
+  max-height: 220px;
+  overflow: auto;
+}
+
+.inline-button {
+  justify-self: start;
+  min-height: 32px;
+  border-radius: 6px;
+  padding: 0 10px;
+  color: var(--cta);
+  background: #ffffff;
+  font-size: 0.8rem;
+}
+
+.inline-button:hover:not(:disabled) {
+  color: #ffffff;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -604,6 +702,14 @@ th {
   .sync-submit-button {
     width: 100%;
     min-width: 0;
+  }
+
+  .skipped-rows-heading {
+    display: grid;
+  }
+
+  .skipped-rows-heading .secondary-button {
+    justify-self: start;
   }
 
   .search-form .actions button[type="submit"] {

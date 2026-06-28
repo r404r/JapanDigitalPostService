@@ -15,6 +15,12 @@ func TestMigrationSQLFreshSQLiteSequence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("sqlite db handle: %v", err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
 	for _, name := range []string{
 		"0001_init.sqlite.sql",
 		"0002_runtime_settings.sqlite.sql",

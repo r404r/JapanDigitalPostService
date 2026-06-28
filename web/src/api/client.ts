@@ -53,10 +53,28 @@ export type SyncRun = {
   rows_added?: number;
   rows_updated?: number;
   rows_deleted?: number;
+  rows_skipped?: number;
   rows_total?: number;
   started_at: string;
   finished_at: string | null;
   error_message?: string | null;
+};
+
+export type SyncSkippedRow = {
+  id: number;
+  run_id: string;
+  source_type: "full" | "add" | "upload";
+  line_number: number;
+  zipcode?: string;
+  jis_code?: string;
+  prefecture?: string;
+  city?: string;
+  town?: string;
+  town_kana?: string;
+  reason?: string;
+  pattern?: string;
+  raw_record_json?: string;
+  created_at?: string;
 };
 
 export type TokenInfo = {
@@ -82,11 +100,13 @@ export type AdminSetting<T> = {
 export type AdminSettings = {
   download_max_retry: AdminSetting<number>;
   scrape_full_url: AdminSetting<string>;
+  town_skip_regex: AdminSetting<string>;
 };
 
 export type AdminSettingsUpdate = {
   download_max_retry?: number;
   scrape_full_url?: string;
+  town_skip_regex?: string;
   reset_to_default?: Array<keyof AdminSettings>;
 };
 
@@ -130,6 +150,14 @@ export class ApiClient {
 
   listSyncRuns() {
     return this.request<SyncRun[]>("/sync/runs?limit=100&offset=0");
+  }
+
+  listSyncSkippedRows(runID: string, limit = 100, offset = 0) {
+    const query = new URLSearchParams({
+      limit: String(limit),
+      offset: String(offset)
+    });
+    return this.request<SyncSkippedRow[]>(`/sync/runs/${encodeURIComponent(runID)}/skipped?${query.toString()}`);
   }
 
   triggerSync(type: SyncType) {

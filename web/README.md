@@ -5,7 +5,8 @@ Vite + React + TypeScript sample，用于手动验证 JapanDigitalPostService AP
 ## 功能
 
 - 查询页：支持邮编、都道府県、市区町村、关键字查询，展示 `total_count` / `returned_count` / `items.length` 与地址表。
-- 同步页：展示 `total_addresses`、运行状态、最近成功同步和同步历史的 `rows_total` / 错误摘要，可用 admin token 触发 full/diff。
+- 同步页：展示 `total_addresses`、运行状态、最近成功同步和同步历史的 `rows_total` / `rows_skipped` / 错误摘要，可用 admin token 触发 full/diff，并可查看过滤明细。
+- 取得设置：读取、保存、恢复默认 `download_max_retry` / `scrape_full_url` / `town_skip_regex`；Go 正则校验由后端返回结果决定，前端不硬阻断。
 - Token 页：发行 read/admin token、查看脱敏列表、吊销 token；明文 token 只在发行后显示一次。
 - 可选载荷加密：后端返回 `X-Payload-Encryption: AES-256-GCM` 时，使用页面输入的 base64(32B) AES-GCM key 解密响应信封后再渲染。
 - Bearer token 与 API 暗号化 key 只保存在当前浏览器 `sessionStorage`，不硬编码到代码中。

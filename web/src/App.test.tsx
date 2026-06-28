@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
@@ -10,14 +10,17 @@ const jsonResponse = (body: unknown, init: ResponseInit = {}) =>
     ...init
   });
 
-const settingsBody = (overrides: Partial<Record<"download_max_retry" | "scrape_full_url", unknown>> = {}) => ({
+const settingsBody = (
+  overrides: Partial<Record<"download_max_retry" | "scrape_full_url" | "town_skip_regex", unknown>> = {}
+) => ({
   download_max_retry: overrides.download_max_retry ?? { value: 3, default: 3, overridden: false },
   scrape_full_url:
     overrides.scrape_full_url ?? {
       value: "https://www.post.japanpost.jp/service/search/zipcode/download/utf/zip/utf_ken_all.zip",
       default: "https://www.post.japanpost.jp/service/search/zipcode/download/utf/zip/utf_ken_all.zip",
       overridden: false
-    }
+    },
+  town_skip_regex: overrides.town_skip_regex ?? { value: "", default: "", overridden: false }
 });
 
 const payloadEncKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
@@ -59,6 +62,30 @@ function bytesToBase64(bytes: Uint8Array) {
   });
   return btoa(binary);
 }
+
+const skippedRow = (lineNumber: number, overrides: Record<string, unknown> = {}) => ({
+  id: lineNumber,
+  run_id: "run-skip",
+  source_type: "full",
+  line_number: lineNumber,
+  zipcode: `100${String(lineNumber).padStart(4, "0")}`,
+  jis_code: "13101",
+  prefecture: "東京都",
+  city: "千代田区",
+  town: `除外町域${lineNumber}`,
+  town_kana: `ジョガイ${lineNumber}`,
+  reason: "town_regex",
+  pattern: "(?i)町域",
+  raw_record_json: JSON.stringify([
+    `raw-row-${lineNumber}`,
+    "東京都",
+    "千代田区",
+    `raw-tail-${lineNumber}`,
+    "長い raw record の末尾確認用テキスト"
+  ]),
+  created_at: "2026-06-11T00:00:00Z",
+  ...overrides
+});
 
 describe("App", () => {
   beforeEach(() => {
@@ -367,6 +394,115 @@ describe("App", () => {
     );
   });
 
+  it("opens skipped row details from sync history and paginates them", async () => {
+    sessionStorage.setItem("apiToken", "admin-token");
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(settingsBody()))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          total_addresses: 42,
+          running: false,
+          last_success_at: "2026-06-11T00:00:00Z",
+          last_type: "full"
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            id: "run-skip",
+            type: "full",
+            status: "success",
+            trigger: "manual",
+            rows_added: 3,
+            rows_updated: 1,
+            rows_deleted: 0,
+            rows_skipped: 101,
+            rows_total: 105,
+            started_at: "2026-06-11T00:00:00Z",
+            finished_at: "2026-06-11T00:00:01Z",
+            error_message: null
+          }
+        ])
+      )
+      .mockResolvedValueOnce(jsonResponse(Array.from({ length: 100 }, (_, index) => skippedRow(index + 1))))
+      .mockResolvedValueOnce(jsonResponse([skippedRow(101)]));
+
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "管理" }));
+
+    await userEvent.click(await screen.findByRole("button", { name: "除外行を表示" }));
+
+    expect(fetch).toHaveBeenCalledWith(
+      "/v1/sync/runs/run-skip/skipped?limit=100&offset=0",
+      expect.objectContaining({
+        headers: expect.any(Headers)
+      })
+    );
+    expect(await screen.findByText("除外行明細")).toBeInTheDocument();
+    expect(screen.getByText("東京都 / 千代田区 / 除外町域1")).toBeInTheDocument();
+    expect(screen.getAllByText("(?i)町域").length).toBeGreaterThan(0);
+    expect(screen.getByText(/\["raw-row-1","東京都"/)).toBeInTheDocument();
+    expect(screen.queryByText(/raw-tail-1/)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getAllByRole("button", { name: "raw を表示" })[0]);
+    expect(screen.getByText(/raw-tail-1/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "さらに読み込む" }));
+
+    expect(fetch).toHaveBeenCalledWith(
+      "/v1/sync/runs/run-skip/skipped?limit=100&offset=100",
+      expect.objectContaining({
+        headers: expect.any(Headers)
+      })
+    );
+    expect(await screen.findByText("東京都 / 千代田区 / 除外町域101")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "さらに読み込む" })).not.toBeInTheDocument();
+  });
+
+  it("clears skipped row details when the bearer token is removed", async () => {
+    sessionStorage.setItem("apiToken", "admin-token");
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(settingsBody()))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          total_addresses: 42,
+          running: false,
+          last_success_at: "2026-06-11T00:00:00Z",
+          last_type: "full"
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            id: "run-skip",
+            type: "full",
+            status: "success",
+            trigger: "manual",
+            rows_added: 3,
+            rows_updated: 1,
+            rows_deleted: 0,
+            rows_skipped: 1,
+            rows_total: 5,
+            started_at: "2026-06-11T00:00:00Z",
+            finished_at: "2026-06-11T00:00:01Z",
+            error_message: null
+          }
+        ])
+      )
+      .mockResolvedValueOnce(jsonResponse([skippedRow(1)]));
+
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "管理" }));
+    await userEvent.click(await screen.findByRole("button", { name: "除外行を表示" }));
+    expect(await screen.findByText("東京都 / 千代田区 / 除外町域1")).toBeInTheDocument();
+
+    await userEvent.clear(screen.getByLabelText("Bearer token"));
+
+    expect(screen.queryByText("除外行明細")).not.toBeInTheDocument();
+    expect(screen.queryByText("東京都 / 千代田区 / 除外町域1")).not.toBeInTheDocument();
+    expect(screen.getByText("同期履歴はまだありません。")).toBeInTheDocument();
+  });
+
   it("separates sync refresh from the selected sync-mode action", async () => {
     sessionStorage.setItem("apiToken", "admin-token");
     vi.mocked(fetch)
@@ -597,7 +733,8 @@ describe("App", () => {
       .mockResolvedValueOnce(
         jsonResponse(
           settingsBody({
-            download_max_retry: { value: 5, default: 3, overridden: true }
+            download_max_retry: { value: 5, default: 3, overridden: true },
+            town_skip_regex: { value: "(?i)町域", default: "", overridden: true }
           })
         )
       )
@@ -609,6 +746,7 @@ describe("App", () => {
     const retryInput = await screen.findByLabelText("リトライ回数");
     await userEvent.clear(retryInput);
     await userEvent.type(retryInput, "5");
+    await userEvent.type(screen.getByLabelText("町域名フィルター"), "(?i)町域");
     await userEvent.click(screen.getByRole("button", { name: "保存" }));
 
     expect(await screen.findByText("設定を保存しました。")).toBeInTheDocument();
@@ -618,7 +756,8 @@ describe("App", () => {
         method: "PUT",
         body: JSON.stringify({
           download_max_retry: 5,
-          scrape_full_url: "https://www.post.japanpost.jp/service/search/zipcode/download/utf/zip/utf_ken_all.zip"
+          scrape_full_url: "https://www.post.japanpost.jp/service/search/zipcode/download/utf/zip/utf_ken_all.zip",
+          town_skip_regex: "(?i)町域"
         })
       })
     );
@@ -631,7 +770,50 @@ describe("App", () => {
       expect.objectContaining({
         method: "PUT",
         body: JSON.stringify({
-          reset_to_default: ["download_max_retry", "scrape_full_url"]
+          reset_to_default: ["download_max_retry", "scrape_full_url", "town_skip_regex"]
+        })
+      })
+    );
+  });
+
+  it("shows backend validation errors for invalid town filter regexes", async () => {
+    sessionStorage.setItem("apiToken", "admin-token");
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(settingsBody()))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          total_addresses: 0,
+          running: false,
+          last_success_at: null,
+          last_type: null
+        })
+      )
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            status: "invalid_request",
+            message: "町域名フィルターの正規表現が正しくありません。"
+          },
+          { status: 400 }
+        )
+      );
+
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "管理" }));
+
+    fireEvent.change(await screen.findByLabelText("町域名フィルター"), { target: { value: "[" } });
+    await userEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("町域名フィルターの正規表現が正しくありません。");
+    expect(fetch).toHaveBeenCalledWith(
+      "/v1/admin/settings",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({
+          download_max_retry: 3,
+          scrape_full_url: "https://www.post.japanpost.jp/service/search/zipcode/download/utf/zip/utf_ken_all.zip",
+          town_skip_regex: "["
         })
       })
     );

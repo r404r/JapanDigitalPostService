@@ -8,6 +8,7 @@ import type {
   CreatedToken,
   SearchResult,
   SyncRun,
+  SyncSkippedRow,
   SyncStatus,
   SyncType,
   TokenInfo
@@ -166,6 +167,7 @@ function SyncPanel({ api, hasToken }: { api: ApiClient; hasToken: boolean }) {
   const [status, setStatus] = useState<SyncStatus | null>(null);
   const [runs, setRuns] = useState<SyncRun[]>([]);
   const [triggered, setTriggered] = useState<SyncRun | null>(null);
+  const [selectedSkippedRun, setSelectedSkippedRun] = useState<SyncRun | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [loading, setLoading] = useState(false);
   const [triggerType, setTriggerType] = useState<SyncType>("auto");
@@ -182,6 +184,7 @@ function SyncPanel({ api, hasToken }: { api: ApiClient; hasToken: boolean }) {
       }
       setStatus(nextStatus);
       setRuns(nextRuns);
+      setSelectedSkippedRun((currentRun) => nextRuns.find((run) => run.id === currentRun?.id) ?? null);
     } catch (caught) {
       if (loadGeneration.current === generation) {
         setError(caught as ApiError);
@@ -198,6 +201,7 @@ function SyncPanel({ api, hasToken }: { api: ApiClient; hasToken: boolean }) {
     setStatus(null);
     setRuns([]);
     setTriggered(null);
+    setSelectedSkippedRun(null);
     setError(null);
     setLoading(false);
   }, []);
@@ -296,8 +300,22 @@ function SyncPanel({ api, hasToken }: { api: ApiClient; hasToken: boolean }) {
       )}
       <section className="panel">
         <h3>同期履歴</h3>
-        {runs.length === 0 ? <EmptyState text="同期履歴はまだありません。" /> : <SyncRunsTable runs={runs} />}
+        {runs.length === 0 ? (
+          <EmptyState text="同期履歴はまだありません。" />
+        ) : (
+          <SyncRunsTable
+            runs={runs}
+            selectedRunID={selectedSkippedRun?.id ?? null}
+            onShowSkippedRows={setSelectedSkippedRun}
+          />
+        )}
       </section>
+      <SkippedRowsPanel
+        api={api}
+        run={selectedSkippedRun}
+        hasToken={hasToken}
+        onClose={() => setSelectedSkippedRun(null)}
+      />
     </section>
   );
 }
@@ -305,11 +323,16 @@ function SyncPanel({ api, hasToken }: { api: ApiClient; hasToken: boolean }) {
 type SettingsForm = {
   download_max_retry: string;
   scrape_full_url: string;
+  town_skip_regex: string;
 };
 
 function SettingsPanel({ api, hasToken }: { api: ApiClient; hasToken: boolean }) {
   const [settings, setSettings] = useState<AdminSettings | null>(null);
-  const [form, setForm] = useState<SettingsForm>({ download_max_retry: "", scrape_full_url: "" });
+  const [form, setForm] = useState<SettingsForm>({
+    download_max_retry: "",
+    scrape_full_url: "",
+    town_skip_regex: ""
+  });
   const [error, setError] = useState<ApiError | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -318,7 +341,8 @@ function SettingsPanel({ api, hasToken }: { api: ApiClient; hasToken: boolean })
     setSettings(nextSettings);
     setForm({
       download_max_retry: String(nextSettings.download_max_retry.value),
-      scrape_full_url: nextSettings.scrape_full_url.value
+      scrape_full_url: nextSettings.scrape_full_url.value,
+      town_skip_regex: nextSettings.town_skip_regex.value
     });
   };
 
@@ -338,7 +362,7 @@ function SettingsPanel({ api, hasToken }: { api: ApiClient; hasToken: boolean })
   useEffect(() => {
     if (!hasToken) {
       setSettings(null);
-      setForm({ download_max_retry: "", scrape_full_url: "" });
+      setForm({ download_max_retry: "", scrape_full_url: "", town_skip_regex: "" });
       setError(null);
       setMessage("");
       return;
@@ -379,7 +403,8 @@ function SettingsPanel({ api, hasToken }: { api: ApiClient; hasToken: boolean })
       applySettings(
         await api.updateAdminSettings({
           download_max_retry: Number(form.download_max_retry),
-          scrape_full_url: form.scrape_full_url.trim()
+          scrape_full_url: form.scrape_full_url.trim(),
+          town_skip_regex: form.town_skip_regex.trim()
         })
       );
       setMessage("設定を保存しました。");
@@ -397,7 +422,7 @@ function SettingsPanel({ api, hasToken }: { api: ApiClient; hasToken: boolean })
     try {
       applySettings(
         await api.updateAdminSettings({
-          reset_to_default: ["download_max_retry", "scrape_full_url"]
+          reset_to_default: ["download_max_retry", "scrape_full_url", "town_skip_regex"]
         })
       );
       setMessage("既定値に戻しました。");
@@ -412,7 +437,7 @@ function SettingsPanel({ api, hasToken }: { api: ApiClient; hasToken: boolean })
     <form className="panel settings-form" onSubmit={save}>
       <div className="section-heading">
         <h2>取得設定</h2>
-        <p>全量取得 URL とダウンロードのリトライ回数を変更できます。</p>
+        <p>取得 URL、リトライ回数、町域名フィルターを変更できます。</p>
       </div>
       <div className="input-grid settings-grid">
         <label>
@@ -435,6 +460,20 @@ function SettingsPanel({ api, hasToken }: { api: ApiClient; hasToken: boolean })
             disabled={!hasToken || loading}
           />
           <small>https://post.japanpost.jp または https://www.post.japanpost.jp のみ許可。</small>
+        </label>
+        <label>
+          <span>町域名フィルター</span>
+          <input
+            aria-label="町域名フィルター"
+            value={form.town_skip_regex}
+            placeholder="^(?:以下に掲載がない場合)$"
+            onChange={(event) => setForm({ ...form, town_skip_regex: event.target.value })}
+            disabled={!hasToken || loading}
+          />
+          <small>
+            空欄で無効。Go 正規表現として保存時に検証され、次回の同期またはアップロード取り込みで適用されます。
+            現在: {settings?.town_skip_regex.overridden ? "変更済み" : "既定値"}
+          </small>
         </label>
       </div>
       <div className="actions">
@@ -707,7 +746,15 @@ function AddressTable({ addresses }: { addresses: Address[] }) {
   );
 }
 
-function SyncRunsTable({ runs }: { runs: SyncRun[] }) {
+function SyncRunsTable({
+  runs,
+  selectedRunID,
+  onShowSkippedRows
+}: {
+  runs: SyncRun[];
+  selectedRunID: string | null;
+  onShowSkippedRows: (run: SyncRun) => void;
+}) {
   return (
     <div className="table-wrap">
       <table>
@@ -717,21 +764,197 @@ function SyncRunsTable({ runs }: { runs: SyncRun[] }) {
             <th>status</th>
             <th>time</th>
             <th>processed</th>
+            <th>skipped</th>
             <th>error</th>
           </tr>
         </thead>
         <tbody>
-          {runs.map((run) => (
-            <tr key={run.id}>
-              <td>{run.type}</td>
-              <td>{run.status}</td>
-              <td>{formatDate(run.started_at)} - {formatDate(run.finished_at)}</td>
-              <td>{run.rows_total ?? countRows(run)}</td>
-              <td>{run.error_message ?? "-"}</td>
-            </tr>
-          ))}
+          {runs.map((run) => {
+            const skipped = skippedRows(run);
+            return (
+              <tr key={run.id}>
+                <td>{run.type}</td>
+                <td>{run.status}</td>
+                <td>{formatDate(run.started_at)} - {formatDate(run.finished_at)}</td>
+                <td>{run.rows_total ?? countRows(run)}</td>
+                <td>
+                  {skipped > 0 ? (
+                    <button
+                      className="table-action"
+                      type="button"
+                      aria-pressed={run.id === selectedRunID}
+                      onClick={() => onShowSkippedRows(run)}
+                    >
+                      除外行を表示
+                    </button>
+                  ) : (
+                    "-"
+                  )}
+                  {skipped > 0 && <span className="skipped-count">{skipped}</span>}
+                </td>
+                <td>{run.error_message ?? "-"}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+const skippedRowsPageSize = 100;
+
+function SkippedRowsPanel({
+  api,
+  run,
+  hasToken,
+  onClose
+}: {
+  api: ApiClient;
+  run: SyncRun | null;
+  hasToken: boolean;
+  onClose: () => void;
+}) {
+  const [rows, setRows] = useState<SyncSkippedRow[]>([]);
+  const [offset, setOffset] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<ApiError | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [expandedRawIDs, setExpandedRawIDs] = useState<Set<number>>(() => new Set());
+
+  const loadPage = useCallback(
+    async (nextOffset: number, replace: boolean) => {
+      if (!run || !hasToken) {
+        return;
+      }
+      setLoading(true);
+      setError(null);
+      try {
+        const nextRows = await api.listSyncSkippedRows(run.id, skippedRowsPageSize, nextOffset);
+        setRows((currentRows) => replace ? nextRows : [...currentRows, ...nextRows]);
+        setOffset(nextOffset + nextRows.length);
+        setHasMore(nextRows.length === skippedRowsPageSize);
+      } catch (caught) {
+        setError(caught as ApiError);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [api, run, hasToken]
+  );
+
+  useEffect(() => {
+    setRows([]);
+    setOffset(0);
+    setError(null);
+    setHasMore(false);
+    setExpandedRawIDs(new Set());
+    if (!run || !hasToken) {
+      setLoading(false);
+      return;
+    }
+    void loadPage(0, true);
+  }, [run, hasToken, loadPage]);
+
+  const toggleRaw = (rowID: number) => {
+    setExpandedRawIDs((currentIDs) => {
+      const nextIDs = new Set(currentIDs);
+      if (nextIDs.has(rowID)) {
+        nextIDs.delete(rowID);
+      } else {
+        nextIDs.add(rowID);
+      }
+      return nextIDs;
+    });
+  };
+
+  if (!run) {
+    return null;
+  }
+
+  return (
+    <section className="panel skipped-rows-panel" aria-labelledby="skipped-rows-title">
+      <div className="section-heading skipped-rows-heading">
+        <div>
+          <h3 id="skipped-rows-title">除外行明細</h3>
+          <p>
+            run {run.id} / 除外 {skippedRows(run)} 件。最新の同期履歴から読み込んだ明細を表示します。
+          </p>
+        </div>
+        <button className="secondary-button" type="button" onClick={onClose}>
+          閉じる
+        </button>
+      </div>
+      {error && <StatusNotice error={error} />}
+      {loading && rows.length === 0 && <p className="empty">除外行を読み込んでいます。</p>}
+      {!loading && rows.length === 0 && !error && <EmptyState text="除外行はありません。" />}
+      {rows.length > 0 && (
+        <>
+          <div className="table-wrap">
+            <table className="skipped-rows-table">
+              <thead>
+                <tr>
+                  <th>source</th>
+                  <th>line</th>
+                  <th>zipcode</th>
+                  <th>prefecture / city / town</th>
+                  <th>town_kana</th>
+                  <th>pattern</th>
+                  <th>raw</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.id}>
+                    <td>{row.source_type}</td>
+                    <td>{row.line_number}</td>
+                    <td>{row.zipcode ?? "-"}</td>
+                    <td>{[row.prefecture, row.city, row.town].filter(Boolean).join(" / ") || "-"}</td>
+                    <td>{row.town_kana ?? "-"}</td>
+                    <td>{row.pattern ?? "-"}</td>
+                    <td>
+                      <RawRecordCell
+                        row={row}
+                        expanded={expandedRawIDs.has(row.id)}
+                        onToggle={() => toggleRaw(row.id)}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {hasMore && (
+            <div className="actions">
+              <button type="button" className="secondary-button" onClick={() => loadPage(offset, false)} disabled={loading}>
+                {loading ? "読込中" : "さらに読み込む"}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+function RawRecordCell({
+  row,
+  expanded,
+  onToggle
+}: {
+  row: SyncSkippedRow;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  if (!row.raw_record_json) {
+    return <span>-</span>;
+  }
+  return (
+    <div className={`skipped-row-raw${expanded ? " expanded" : ""}`}>
+      <code>{expanded ? row.raw_record_json : truncateText(row.raw_record_json, 36)}</code>
+      <button className="inline-button" type="button" onClick={onToggle}>
+        {expanded ? "raw を隠す" : "raw を表示"}
+      </button>
     </div>
   );
 }
@@ -778,7 +1001,18 @@ function EmptyState({ text }: { text: string }) {
 }
 
 function countRows(run: SyncRun) {
-  return (run.rows_added ?? 0) + (run.rows_updated ?? 0) + (run.rows_deleted ?? 0);
+  return (run.rows_added ?? 0) + (run.rows_updated ?? 0) + (run.rows_deleted ?? 0) + skippedRows(run);
+}
+
+function skippedRows(run: SyncRun) {
+  return run.rows_skipped ?? 0;
+}
+
+function truncateText(value: string, maxLength: number) {
+  if (value.length <= maxLength) {
+    return value;
+  }
+  return `${value.slice(0, maxLength)}...`;
 }
 
 function formatDate(value?: string | null) {

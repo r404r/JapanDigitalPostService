@@ -1,13 +1,22 @@
 # task-0030 — Web 接入导入过滤正则与过滤履历
 
-- 状态: 待实施
+- 状态: 已完成
 - 依赖: GHO-125（后端 `town_skip_regex` 与 `sync_skipped_rows` 审计 API）
-- 阶段: React sample 管理页补齐
+- 阶段: React sample 管理页补齐完成
 
 ## Goal
 在现有 React sample 管理页中接入后端已实现的导入过滤能力：管理员可以配置町域名过滤正则，并能从同步履历查看某次同步被过滤的明细。
 
-## 调研结论
+## 实施结果
+- `web/src/api/client.ts` 增加 `town_skip_regex` 设置类型、`rows_skipped`、`SyncSkippedRow` 与 `listSyncSkippedRows()`。
+- `web/src/App.tsx` 的「取得設定」支持读取、保存、恢复默认「町域名フィルター」；前端不使用 JavaScript `RegExp` 硬阻断，后端 Go 正则校验错误按 API message 展示。
+- 「同期履歴」增加 skipped 列；`rows_skipped > 0` 的 run 可点击「除外行を表示」打开过滤明细。
+- 过滤明细面板支持 100 条分页、「さらに読み込む」、raw 截断预览与「raw を表示」/「raw を隠す」切换；清空 Bearer token 时同步清空状态、履历与过滤明细。
+- `web/src/App.test.tsx` 覆盖设置保存/恢复默认、后端正则错误、Go 正则兼容、过滤明细读取/分页和 token 清空。
+- 验证过程中补充 Windows 本地回归稳定性修正：关闭 migration SQLite 测试连接，避免 `fresh.db` 清理时被占用；`make regression-report` 改为显式 Bash 调用，并让脚本在 WSL Bash 下可找到 Windows `go.exe`。
+- 文档已同步更新 README、`web/README.md`、`docs/spec.md` 与 `docs/guide/README.md`。
+
+## 调研结论（实施前）
 - 后端已支持 `GET /v1/admin/settings` / `PUT /v1/admin/settings` 的 `town_skip_regex` 字段；空字符串表示关闭或恢复默认。
 - 后端已支持 `GET /v1/sync/runs/{id}/skipped?limit=&offset=`，返回 `SyncSkippedRow` 列表；同步运行记录已包含 `rows_skipped`。
 - 当前 Web 端 `web/src/api/client.ts` 的 `AdminSettings` / `AdminSettingsUpdate` 仍只有 `download_max_retry` 与 `scrape_full_url`。
@@ -149,15 +158,15 @@
 - 若 UI 截图随 task 更新，则同步更新 `docs/guide/` 截图文件。
 
 ## 完成条件
-- [ ] 管理页「取得設定」可以读取、保存、恢复默认 `town_skip_regex`。
-- [ ] 前端不硬阻断 Go 正则；后端正则校验错误能在页面展示。
-- [ ] 同步履历显示 `rows_skipped`。
-- [ ] 对 `rows_skipped > 0` 的运行记录，可以在页面查看过滤明细。
-- [ ] 过滤明细支持至少 100 条分页读取，长 `raw_record_json` 不撑破布局。
-- [ ] 清空 token 时，设置、同步履历、过滤明细一并清空，避免保留旧 token 数据。
-- [ ] `npm run test --prefix web` 覆盖设置保存、后端正则校验错误、Go 正则兼容、过滤明细读取与分页。
-- [ ] `npm run build --prefix web` 通过。
-- [ ] 文档影响判定：检查 README、`docs/spec.md`、`docs/architecture.md`、`docs/guide/`、`docs/api/*`、`api/openapi.yaml` 是否需要更新；需要则同步更新，不需要则说明无需更新。
+- [x] 管理页「取得設定」可以读取、保存、恢复默认 `town_skip_regex`。
+- [x] 前端不硬阻断 Go 正则；后端正则校验错误能在页面展示。
+- [x] 同步履历显示 `rows_skipped`。
+- [x] 对 `rows_skipped > 0` 的运行记录，可以在页面查看过滤明细。
+- [x] 过滤明细支持至少 100 条分页读取，长 `raw_record_json` 不撑破布局。
+- [x] 清空 token 时，设置、同步履历、过滤明细一并清空，避免保留旧 token 数据。
+- [x] `npm run test --prefix web` 覆盖设置保存、后端正则校验错误、Go 正则兼容、过滤明细读取与分页。
+- [x] `npm run build --prefix web` 通过。
+- [x] 文档影响判定：检查 README、`docs/spec.md`、`docs/architecture.md`、`docs/guide/`、`docs/api/*`、`api/openapi.yaml` 是否需要更新；需要则同步更新，不需要则说明无需更新。
 
 ## 实施边界
 - 不修改后端 API 契约、数据库 schema、同步引擎或迁移。
@@ -171,6 +180,12 @@
 - `npm run build --prefix web`
 - `make test`
 - `make regression-report`
+
+## 文档影响判定
+- 已更新 `README.md`、`web/README.md`、`docs/spec.md`、`docs/guide/README.md`，同步说明 Web 已接入导入过滤正则与过滤履历明细。
+- `docs/architecture.md` 不需要更新：task-0030 未改变后端架构、数据模型、部署结构或运行时配置解析规则。
+- `api/openapi.yaml` 与 `docs/api/*` 不需要更新：GHO-125 已提供 `town_skip_regex` 与 `GET /v1/sync/runs/{id}/skipped` 契约，本 task 只实现 Web 消费端。
+- 未更新 `docs/guide/assets/` 截图：本 task 未重新拍摄截图，文字手册已覆盖新增操作。
 
 ## 风险与处理
 - **Go 正则与 JavaScript 正则存在语义差异**：前端不使用 JavaScript `RegExp` 阻止保存；后端 Go 正则校验错误作为最终结果展示。
