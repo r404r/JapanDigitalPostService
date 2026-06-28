@@ -15,6 +15,8 @@ const (
 	SettingDownloadMaxRetry RuntimeSettingKey = "download_max_retry"
 	// SettingScrapeFullURL 全量抓取数据源 URL（管理画面可配，默认 = 当前配置的全量 URL）。
 	SettingScrapeFullURL RuntimeSettingKey = "scrape_full_url"
+	// SettingTownSkipRegex 导入时按町域名匹配并跳过的 Go 正则表达式。空值表示不启用。
+	SettingTownSkipRegex RuntimeSettingKey = "town_skip_regex"
 )
 
 // RuntimeSetting 是一条持久化的覆盖值。Value 以字符串存储（数值/URL 均如此），
@@ -45,4 +47,5 @@ type SettingsRepository interface {
 type EffectiveSyncSettings struct {
 	ScrapeFullURL    string
 	DownloadMaxRetry int
+	TownSkipRegex    string
 }

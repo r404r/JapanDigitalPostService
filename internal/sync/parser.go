@@ -40,6 +40,20 @@ const (
 // 产出规整后的 *domain.Address 并回调 emit。emit 返回错误即中止解析。返回成功解析
 // 的行数。解析过程逐行进行，不将整文件读入内存。
 func ParseStream(r io.Reader, emit func(*domain.Address) error) (int, error) {
+	return ParseStreamRows(r, func(row ParsedRow) error {
+		return emit(row.Address)
+	})
+}
+
+// ParsedRow carries both normalized address fields and source-row context for
+// import audit logs.
+type ParsedRow struct {
+	Address    *domain.Address
+	Record     []string
+	LineNumber int
+}
+
+func ParseStreamRows(r io.Reader, emit func(ParsedRow) error) (int, error) {
 	cr := csv.NewReader(r)
 	cr.FieldsPerRecord = -1 // 行宽自校验，容忍尾随空列
 	cr.LazyQuotes = true    // 容忍町域名中的特殊引号
@@ -66,7 +80,7 @@ func ParseStream(r io.Reader, emit func(*domain.Address) error) (int, error) {
 		if err != nil {
 			return count, fmt.Errorf("record %d: %w", line, err)
 		}
-		if err := emit(addr); err != nil {
+		if err := emit(ParsedRow{Address: addr, Record: rec, LineNumber: line}); err != nil {
 			return count, err
 		}
 		count++

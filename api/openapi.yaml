@@ -88,6 +88,25 @@ paths:
                 items: { $ref: '#/components/schemas/SyncRun' }
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
+  /sync/runs/{id}/skipped:
+    get:
+      summary: 同步运行的跳过明细
+      operationId: listSyncSkippedRows
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 100, maximum: 1000 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/SyncSkippedRow' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
   /sync/trigger:
     post:
       summary: 手动触发同步（admin）
@@ -315,16 +334,34 @@ components:
         rows_added: { type: integer }
         rows_updated: { type: integer }
         rows_deleted: { type: integer }
+        rows_skipped: { type: integer }
         rows_total: { type: integer }
         started_at: { type: string, format: date-time }
         finished_at: { type: string, format: date-time, nullable: true }
         duration_ms: { type: integer }
         error_message: { type: string, nullable: true }
+    SyncSkippedRow:
+      type: object
+      properties:
+        id: { type: integer }
+        run_id: { type: string }
+        source_type: { type: string, enum: [full, add] }
+        line_number: { type: integer }
+        zipcode: { type: string }
+        jis_code: { type: string }
+        prefecture: { type: string }
+        city: { type: string }
+        town: { type: string }
+        town_kana: { type: string }
+        reason: { type: string, example: town_regex }
+        pattern: { type: string, description: 匹配到该行的町域名过滤正则 }
+        raw_record_json: { type: string, description: 原始 CSV record 的 JSON 数组字符串 }
+        created_at: { type: string, format: date-time }
     AdminSettings:
       type: object
       description: >
         运行时抓取设置视图。每项的 value/default 类型按键而定（重试为整数、URL 为字符串）。
-      required: [download_max_retry, scrape_full_url]
+      required: [download_max_retry, scrape_full_url, town_skip_regex]
       properties:
         download_max_retry:
           type: object
@@ -337,6 +374,14 @@ components:
         scrape_full_url:
           type: object
           description: 全量抓取数据源 URL（https + 日本邮便官方域名）。
+          required: [value, default, overridden]
+          properties:
+            value: { type: string }
+            default: { type: string }
+            overridden: { type: boolean }
+        town_skip_regex:
+          type: object
+          description: 导入时按町域名跳过记录的 Go 正则表达式。空字符串表示不启用。
           required: [value, default, overridden]
           properties:
             value: { type: string }
@@ -356,9 +401,12 @@ components:
         scrape_full_url:
           type: string
           description: 设置全量 URL 覆盖值（必须 https 且属日本邮便官方域名）。
+        town_skip_regex:
+          type: string
+          description: 设置町域名过滤正则；空字符串等同恢复默认/关闭。
         reset_to_default:
           type: array
-          items: { type: string, enum: [download_max_retry, scrape_full_url] }
+          items: { type: string, enum: [download_max_retry, scrape_full_url, town_skip_regex] }
           description: 恢复默认（删除覆盖值）的键列表。
     TokenInfo:
       type: object

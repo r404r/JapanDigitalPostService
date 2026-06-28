@@ -104,16 +104,17 @@
 管理画面可在线配置两项抓取行为，覆盖值持久化到 DB（`runtime_settings` 表），重启后保留：
 
 - `GET /v1/admin/settings` → 返回每项的 `value`（当前有效值）、`default`（默认值，恢复默认将回退到此）、`overridden`（是否存在 DB 覆盖）。
-- `PUT /v1/admin/settings` → 部分更新；省略字段不变。body `{ "download_max_retry": 5, "scrape_full_url": "https://…", "reset_to_default": ["scrape_full_url"] }`：列入 `reset_to_default` 的键删除其覆盖值（对应画面「恢复默认」按钮）。同一键不可同时设值与重置（返回 `400`）。
+- `PUT /v1/admin/settings` → 部分更新；省略字段不变。body `{ "download_max_retry": 5, "scrape_full_url": "https://…", "town_skip_regex": "^(?:以下に掲載がない場合)$", "reset_to_default": ["scrape_full_url"] }`：列入 `reset_to_default` 的键删除其覆盖值（对应画面「恢复默认」按钮）。同一键不可同时设值与重置（返回 `400`）。
 
 配置项与生效规则：
 
 1. **`download_max_retry`**（抓取下载额外重试次数，默认 `3`，有效范围 `0–10`）。校验越界返回 `400 invalid_request`，日语提示「リトライ回数は 0 以上 10 以下の整数で指定してください。」。
 2. **`scrape_full_url`**（全量抓取数据源 URL，默认 = 当前配置的全量 URL）。校验覆盖 SSRF 风险：必须为 `https`、主机属日本邮便官方域名白名单（`www.post.japanpost.jp` / `post.japanpost.jp`）、不含用户名信息；否则返回 `400`，日语提示（如「URL のドメインは日本郵便の公式サイト（post.japanpost.jp）のみ許可されています。」）。
+3. **`town_skip_regex`**（导入时按町域名跳过的 Go 正则，默认空=关闭）。匹配时该行不写入 `addresses`，但会作为同一 `sync_run` 的 `sync_skipped_rows` 明细记录（含行号、地址关键字段、匹配 pattern、原始 CSV record JSON），并计入 `rows_skipped`；可经 `GET /v1/sync/runs/{id}/skipped` 查验。非法正则返回 `400 invalid_request`，日语提示「町域名フィルターの正規表現が正しくありません。」。
 
 **优先级**：有效值 = DB 覆盖 > env > 代码默认（详见 architecture §9.1）。
 
-**生效范围与重启后保留**：引擎在**每次同步运行前**解析有效配置（不在启动期冻结），因此管理画面改动无需重启即在三条触发路径生效——进程内调度（`SYNC_CRON`）、手动触发（`POST /v1/sync/trigger`）、独立批处理（`cmd/batch`）。覆盖值持久化于 DB，重启后保留。手工上传同期（WP2）走本地文件重建、不发起网络下载，故 `download_max_retry` / `scrape_full_url` 对上传路径不适用；上传与其它路径共用同一持久化与 applier。
+**生效范围与重启后保留**：引擎在**每次同步运行前**解析有效配置（不在启动期冻结），因此管理画面改动无需重启即在三条触发路径生效——进程内调度（`SYNC_CRON`）、手动触发（`POST /v1/sync/trigger`）、独立批处理（`cmd/batch`）。覆盖值持久化于 DB，重启后保留。手工上传同期（WP2）走本地文件重建、不发起网络下载，故 `download_max_retry` / `scrape_full_url` 对上传路径不适用；`town_skip_regex` 对上传与其它导入路径均生效。
 
 ## 4. 同步行为规格（task-0004 已实现）
 
@@ -218,6 +219,7 @@
 | `SYNC_FULL_URL` | 官网全量 zip | 全量数据源（基线默认；可被管理画面 `scrape_full_url` 的 DB 覆盖在线改写，见 §3.6） |
 | `SYNC_ADD_URL_TEMPLATE` / `SYNC_DEL_URL_TEMPLATE` | 官网 add/del（含 `%s`=YYMM） | 差分数据源模板 |
 | `SYNC_BATCH_SIZE` | `1000` | upsert 批大小 |
+| `SYNC_TOWN_SKIP_REGEX` | 空 | 町域名导入跳过正则的基线默认；可被管理画面 `town_skip_regex` 的 DB 覆盖在线改写 |
 | `SYNC_FULL_PRUNE` / `SYNC_FULL_MIN_ROWS` | `true` / `1000` | 全量剪枝开关 / 安全下限 |
 | `SYNC_DIFF_FALLBACK_FULL` | `true` | 差分窗口无文件时回退全量 |
 | `SYNC_DIFF_LOOKBACK_MONTHS` | `3` | 差分回看月份窗口（含当月） |

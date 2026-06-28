@@ -22,6 +22,9 @@ type SettingsView struct {
 	ScrapeFullURL           string
 	ScrapeFullURLDefault    string
 	ScrapeFullURLOver       bool
+	TownSkipRegex           string
+	TownSkipRegexDefault    string
+	TownSkipRegexOver       bool
 }
 
 // SettingsUpdate 是归一化的更新入参：指针字段为 nil=不变；ResetToDefault 列出的键
@@ -29,6 +32,7 @@ type SettingsView struct {
 type SettingsUpdate struct {
 	DownloadMaxRetry *int
 	ScrapeFullURL    *string
+	TownSkipRegex    *string
 	ResetToDefault   []string
 }
 
@@ -63,6 +67,7 @@ type settingItemDTO[T any] struct {
 type settingsDTO struct {
 	DownloadMaxRetry settingItemDTO[int]    `json:"download_max_retry"`
 	ScrapeFullURL    settingItemDTO[string] `json:"scrape_full_url"`
+	TownSkipRegex    settingItemDTO[string] `json:"town_skip_regex"`
 }
 
 // settingsUpdateDTO 是 PUT /v1/admin/settings 的请求体。指针字段缺省=不变；
@@ -70,6 +75,7 @@ type settingsDTO struct {
 type settingsUpdateDTO struct {
 	DownloadMaxRetry *int     `json:"download_max_retry"`
 	ScrapeFullURL    *string  `json:"scrape_full_url"`
+	TownSkipRegex    *string  `json:"town_skip_regex"`
 	ResetToDefault   []string `json:"reset_to_default"`
 }
 
@@ -103,6 +109,7 @@ func (h *handlers) putSettings(w http.ResponseWriter, r *http.Request) {
 	view, err := h.settings.Update(ctx, SettingsUpdate{
 		DownloadMaxRetry: body.DownloadMaxRetry,
 		ScrapeFullURL:    body.ScrapeFullURL,
+		TownSkipRegex:    body.TownSkipRegex,
 		ResetToDefault:   body.ResetToDefault,
 	})
 	if err != nil {
@@ -129,6 +136,11 @@ func toSettingsDTO(v SettingsView) settingsDTO {
 			Value:      v.ScrapeFullURL,
 			Default:    v.ScrapeFullURLDefault,
 			Overridden: v.ScrapeFullURLOver,
+		},
+		TownSkipRegex: settingItemDTO[string]{
+			Value:      v.TownSkipRegex,
+			Default:    v.TownSkipRegexDefault,
+			Overridden: v.TownSkipRegexOver,
 		},
 	}
 }

@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS sync_runs (
     rows_added    BIGINT       NOT NULL DEFAULT 0,
     rows_updated  BIGINT       NOT NULL DEFAULT 0,
     rows_deleted  BIGINT       NOT NULL DEFAULT 0,
+    rows_skipped  BIGINT       NOT NULL DEFAULT 0,
     rows_total    BIGINT       NOT NULL DEFAULT 0,
     started_at    TIMESTAMPTZ  NOT NULL,
     finished_at   TIMESTAMPTZ,
@@ -59,6 +60,24 @@ CREATE TABLE IF NOT EXISTS sync_runs (
 );
 CREATE INDEX IF NOT EXISTS idx_sync_runs_type   ON sync_runs (type);
 CREATE INDEX IF NOT EXISTS idx_sync_runs_status ON sync_runs (status);
+
+CREATE TABLE IF NOT EXISTS sync_skipped_rows (
+    id              BIGSERIAL    PRIMARY KEY,
+    run_id          VARCHAR(36)  NOT NULL,
+    source_type     VARCHAR(16)  NOT NULL,
+    line_number     INTEGER      NOT NULL DEFAULT 0,
+    zipcode         VARCHAR(7)   NOT NULL DEFAULT '',
+    jis_code        VARCHAR(5)   NOT NULL DEFAULT '',
+    prefecture      VARCHAR(64)  NOT NULL DEFAULT '',
+    city            VARCHAR(128) NOT NULL DEFAULT '',
+    town            VARCHAR(256) NOT NULL DEFAULT '',
+    town_kana       VARCHAR(256) NOT NULL DEFAULT '',
+    reason          VARCHAR(64)  NOT NULL DEFAULT '',
+    pattern         VARCHAR(1024) NOT NULL DEFAULT '',
+    raw_record_json TEXT         NOT NULL DEFAULT '',
+    created_at      TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_sync_skipped_rows_run_id ON sync_skipped_rows (run_id);
 
 -- 单行同步互斥锁（id 恒为 1）。
 CREATE TABLE IF NOT EXISTS sync_locks (

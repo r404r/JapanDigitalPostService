@@ -13,6 +13,7 @@ import (
 	"context"
 	"errors"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -36,6 +37,7 @@ var allowedScrapeHosts = map[string]bool{
 type Defaults struct {
 	ScrapeFullURL    string
 	DownloadMaxRetry int
+	TownSkipRegex    string
 }
 
 // Service 解析与变更运行时设置。并发安全由底层 repo / DB 保证；同步引擎与
@@ -72,6 +74,9 @@ type Resolved struct {
 	ScrapeFullURL           string
 	ScrapeFullURLDefault    string
 	ScrapeFullURLOver       bool
+	TownSkipRegex           string
+	TownSkipRegexDefault    string
+	TownSkipRegexOver       bool
 }
 
 // ResolveSyncSettings 返回同步引擎所需的有效配置（DB 覆盖 > env > 默认）。
@@ -85,6 +90,7 @@ func (s *Service) ResolveSyncSettings(ctx context.Context) (domain.EffectiveSync
 	return domain.EffectiveSyncSettings{
 		ScrapeFullURL:    r.ScrapeFullURL,
 		DownloadMaxRetry: r.DownloadMaxRetry,
+		TownSkipRegex:    r.TownSkipRegex,
 	}, nil
 }
 
@@ -103,6 +109,8 @@ func (s *Service) resolve(ctx context.Context) (Resolved, error) {
 		DownloadMaxRetryDefault: s.defaults.DownloadMaxRetry,
 		ScrapeFullURL:           s.defaults.ScrapeFullURL,
 		ScrapeFullURLDefault:    s.defaults.ScrapeFullURL,
+		TownSkipRegex:           s.defaults.TownSkipRegex,
+		TownSkipRegexDefault:    s.defaults.TownSkipRegex,
 	}
 	if raw, ok := overrides[domain.SettingDownloadMaxRetry]; ok {
 		if n, perr := strconv.Atoi(strings.TrimSpace(raw)); perr == nil && validateRetry(n) == nil {
@@ -116,6 +124,12 @@ func (s *Service) resolve(ctx context.Context) (Resolved, error) {
 			out.ScrapeFullURLOver = true
 		}
 	}
+	if raw, ok := overrides[domain.SettingTownSkipRegex]; ok {
+		if validateTownSkipRegex(raw) == nil {
+			out.TownSkipRegex = strings.TrimSpace(raw)
+			out.TownSkipRegexOver = true
+		}
+	}
 	return out, nil
 }
 
@@ -124,6 +138,7 @@ func (s *Service) resolve(ctx context.Context) (Resolved, error) {
 type UpdateInput struct {
 	DownloadMaxRetry *int
 	ScrapeFullURL    *string
+	TownSkipRegex    *string
 	ResetToDefault   []domain.RuntimeSettingKey
 }
 
@@ -133,7 +148,7 @@ func (s *Service) Update(ctx context.Context, in UpdateInput) (Resolved, error) 
 	reset := map[domain.RuntimeSettingKey]bool{}
 	for _, k := range in.ResetToDefault {
 		switch k {
-		case domain.SettingDownloadMaxRetry, domain.SettingScrapeFullURL:
+		case domain.SettingDownloadMaxRetry, domain.SettingScrapeFullURL, domain.SettingTownSkipRegex:
 			reset[k] = true
 		default:
 			return Resolved{}, &ValidationError{Field: string(k), Message: "未知の設定キーです。"}
@@ -146,6 +161,9 @@ func (s *Service) Update(ctx context.Context, in UpdateInput) (Resolved, error) 
 	}
 	if in.ScrapeFullURL != nil && reset[domain.SettingScrapeFullURL] {
 		return Resolved{}, &ValidationError{Field: string(domain.SettingScrapeFullURL), Message: "同じ項目を更新と既定値リセットの両方に指定できません。"}
+	}
+	if in.TownSkipRegex != nil && reset[domain.SettingTownSkipRegex] {
+		return Resolved{}, &ValidationError{Field: string(domain.SettingTownSkipRegex), Message: "同じ項目を更新と既定値リセットの両方に指定できません。"}
 	}
 
 	// 先全部校验，再落库——避免部分写入。
@@ -161,6 +179,13 @@ func (s *Service) Update(ctx context.Context, in UpdateInput) (Resolved, error) 
 		}
 		normalizedURL = strings.TrimSpace(*in.ScrapeFullURL)
 	}
+	var normalizedTownSkipRegex string
+	if in.TownSkipRegex != nil {
+		if err := validateTownSkipRegex(*in.TownSkipRegex); err != nil {
+			return Resolved{}, err
+		}
+		normalizedTownSkipRegex = strings.TrimSpace(*in.TownSkipRegex)
+	}
 
 	if in.DownloadMaxRetry != nil {
 		if err := s.repo.Set(ctx, domain.SettingDownloadMaxRetry, strconv.Itoa(*in.DownloadMaxRetry)); err != nil {
@@ -169,6 +194,15 @@ func (s *Service) Update(ctx context.Context, in UpdateInput) (Resolved, error) 
 	}
 	if in.ScrapeFullURL != nil {
 		if err := s.repo.Set(ctx, domain.SettingScrapeFullURL, normalizedURL); err != nil {
+			return Resolved{}, err
+		}
+	}
+	if in.TownSkipRegex != nil {
+		if normalizedTownSkipRegex == "" {
+			if err := s.repo.Delete(ctx, domain.SettingTownSkipRegex); err != nil {
+				return Resolved{}, err
+			}
+		} else if err := s.repo.Set(ctx, domain.SettingTownSkipRegex, normalizedTownSkipRegex); err != nil {
 			return Resolved{}, err
 		}
 	}
@@ -212,6 +246,18 @@ func validateScrapeURL(raw string) error {
 	host := strings.ToLower(u.Hostname())
 	if !allowedScrapeHosts[host] {
 		return &ValidationError{Field: field, Message: "URL のドメインは日本郵便の公式サイト（post.japanpost.jp）のみ許可されています。"}
+	}
+	return nil
+}
+
+func validateTownSkipRegex(raw string) error {
+	field := string(domain.SettingTownSkipRegex)
+	v := strings.TrimSpace(raw)
+	if v == "" {
+		return nil
+	}
+	if _, err := regexp.Compile(v); err != nil {
+		return &ValidationError{Field: field, Message: "町域名フィルターの正規表現が正しくありません。"}
 	}
 	return nil
 }

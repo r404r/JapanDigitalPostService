@@ -43,6 +43,7 @@ type SyncRun struct {
 	RowsAdded    int64       `gorm:"column:rows_added"`
 	RowsUpdated  int64       `gorm:"column:rows_updated"`
 	RowsDeleted  int64       `gorm:"column:rows_deleted"`
+	RowsSkipped  int64       `gorm:"column:rows_skipped"`
 	RowsTotal    int64       `gorm:"column:rows_total"`
 	StartedAt    time.Time   `gorm:"column:started_at"`
 	FinishedAt   *time.Time  `gorm:"column:finished_at"`
@@ -52,3 +53,25 @@ type SyncRun struct {
 
 // TableName 固定表名。
 func (SyncRun) TableName() string { return "sync_runs" }
+
+// SyncSkippedRow records a source CSV row skipped by an import-time filter.
+// It is keyed to sync_runs so operators can inspect exactly what was excluded
+// from a given batch without relying on process logs.
+type SyncSkippedRow struct {
+	ID            uint      `gorm:"primaryKey;autoIncrement"`
+	RunID         string    `gorm:"column:run_id;type:varchar(36);index"`
+	SourceType    string    `gorm:"column:source_type;type:varchar(16)"`
+	LineNumber    int       `gorm:"column:line_number"`
+	Zipcode       string    `gorm:"column:zipcode;type:varchar(7)"`
+	JISCode       string    `gorm:"column:jis_code;type:varchar(5)"`
+	Prefecture    string    `gorm:"column:prefecture;type:varchar(64)"`
+	City          string    `gorm:"column:city;type:varchar(128)"`
+	Town          string    `gorm:"column:town;type:varchar(256)"`
+	TownKana      string    `gorm:"column:town_kana;type:varchar(256)"`
+	Reason        string    `gorm:"column:reason;type:varchar(64)"`
+	Pattern       string    `gorm:"column:pattern;type:varchar(1024)"`
+	RawRecordJSON string    `gorm:"column:raw_record_json;type:text"`
+	CreatedAt     time.Time `gorm:"column:created_at"`
+}
+
+func (SyncSkippedRow) TableName() string { return "sync_skipped_rows" }

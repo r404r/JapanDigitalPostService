@@ -30,6 +30,7 @@ func (a settingsAdapter) Update(ctx context.Context, in server.SettingsUpdate) (
 	r, err := a.svc.Update(ctx, settings.UpdateInput{
 		DownloadMaxRetry: in.DownloadMaxRetry,
 		ScrapeFullURL:    in.ScrapeFullURL,
+		TownSkipRegex:    in.TownSkipRegex,
 		ResetToDefault:   keys,
 	})
 	if err != nil {
@@ -50,5 +51,8 @@ func toServerView(r settings.Resolved) server.SettingsView {
 		ScrapeFullURL:           r.ScrapeFullURL,
 		ScrapeFullURLDefault:    r.ScrapeFullURLDefault,
 		ScrapeFullURLOver:       r.ScrapeFullURLOver,
+		TownSkipRegex:           r.TownSkipRegex,
+		TownSkipRegexDefault:    r.TownSkipRegexDefault,
+		TownSkipRegexOver:       r.TownSkipRegexOver,
 	}
 }

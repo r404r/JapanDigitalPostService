@@ -42,6 +42,14 @@ func (f *blockingFetcher) Fetch(ctx context.Context, url string) (*SourceFile, e
 	return nil, ctx.Err()
 }
 
+type staticSettingsResolver struct {
+	settings domain.EffectiveSyncSettings
+}
+
+func (r staticSettingsResolver) ResolveSyncSettings(context.Context) (domain.EffectiveSyncSettings, error) {
+	return r.settings, nil
+}
+
 const (
 	rowA = `01101,"060  ","0600000","ホッカイドウ","サッポロシチュウオウク","イカニケイサイガナイバアイ","北海道","札幌市中央区","以下に掲載がない場合",0,0,0,0,0,0`
 	rowB = `01101,"064  ","0640941","ホッカイドウ","サッポロシチュウオウク","アサヒガオカ","北海道","札幌市中央区","旭ケ丘",0,0,1,0,0,0`
@@ -239,6 +247,38 @@ func TestEngineFullKeepsDistinctReadings(t *testing.T) {
 	}
 	if run2.RowsUpdated != 0 || run2.RowsAdded != 0 || run2.RowsDeleted != 0 {
 		t.Errorf("rerun counts a=%d u=%d d=%d, want 0/0/0", run2.RowsAdded, run2.RowsUpdated, run2.RowsDeleted)
+	}
+}
+
+func TestEngineFullSkipsTownRegexAndLogsRows(t *testing.T) {
+	st := openTestStore(t)
+	full := strings.Join([]string{rowA, rowB, rowC}, "\n") + "\n"
+	e := newTestEngine(t, st, map[string]string{"full": full})
+	e.UseSettingsResolver(staticSettingsResolver{settings: domain.EffectiveSyncSettings{
+		ScrapeFullURL:    "full",
+		DownloadMaxRetry: 3,
+		TownSkipRegex:    "旭ケ丘",
+	}})
+
+	run, err := e.Run(context.Background(), domain.SyncFull, domain.TriggerManual)
+	if err != nil {
+		t.Fatalf("full run: %v", err)
+	}
+	if run.RowsTotal != 3 || run.RowsAdded != 2 || run.RowsSkipped != 1 {
+		t.Fatalf("counts total/added/skipped = %d/%d/%d, want 3/2/1", run.RowsTotal, run.RowsAdded, run.RowsSkipped)
+	}
+	if got := count(t, st); got != 2 {
+		t.Fatalf("addresses = %d, want 2", got)
+	}
+	rows, err := st.SyncRuns().ListSkippedRows(context.Background(), run.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("ListSkippedRows: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("skipped rows len=%d, want 1", len(rows))
+	}
+	if rows[0].Town != "旭ケ丘" || rows[0].LineNumber != 2 || rows[0].Pattern != "旭ケ丘" || rows[0].RawRecordJSON == "" {
+		t.Fatalf("skipped row = %+v, want rowB audit fields", rows[0])
 	}
 }
 

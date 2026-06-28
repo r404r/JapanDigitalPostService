@@ -19,6 +19,32 @@ func (r *syncRunRepo) Update(ctx context.Context, run *domain.SyncRun) error {
 	return r.db.WithContext(ctx).Save(run).Error
 }
 
+func (r *syncRunRepo) CreateSkippedRows(ctx context.Context, rows []domain.SyncSkippedRow) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	return r.db.WithContext(ctx).CreateInBatches(rows, 1000).Error
+}
+
+func (r *syncRunRepo) ListSkippedRows(ctx context.Context, runID string, limit, offset int) ([]domain.SyncSkippedRow, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	var rows []domain.SyncSkippedRow
+	err := r.db.WithContext(ctx).
+		Where("run_id = ?", runID).
+		Order("line_number ASC").
+		Limit(limit).Offset(offset).
+		Find(&rows).Error
+	return rows, err
+}
+
 func (r *syncRunRepo) Latest(ctx context.Context) (*domain.SyncRun, error) {
 	return r.first(ctx, r.db.WithContext(ctx).Order("started_at DESC"))
 }

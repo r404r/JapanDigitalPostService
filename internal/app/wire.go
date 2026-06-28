@@ -71,6 +71,7 @@ func BuildSettings(st *store.Store, cfg config.Config) *settings.Service {
 	return settings.NewService(st.Settings(), settings.Defaults{
 		ScrapeFullURL:    cfg.SyncFullURL,
 		DownloadMaxRetry: cfg.DownloadMaxRetry,
+		TownSkipRegex:    cfg.TownSkipRegex,
 	}, time.Now)
 }
 

@@ -134,7 +134,7 @@ func defaultPoolOptions(driver string) (maxOpen int, maxIdle int, lifetime time.
 }
 
 func migrate(db *gorm.DB) error {
-	return db.AutoMigrate(&domain.Address{}, &domain.Token{}, &domain.SyncRun{}, &domain.RuntimeSetting{}, &syncLockRow{})
+	return db.AutoMigrate(&domain.Address{}, &domain.Token{}, &domain.SyncRun{}, &domain.SyncSkippedRow{}, &domain.RuntimeSetting{}, &syncLockRow{})
 }
 
 // Addresses 返回地址 repository。

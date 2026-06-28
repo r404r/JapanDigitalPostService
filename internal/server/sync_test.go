@@ -42,8 +42,12 @@ type fakeRuns struct {
 	err           error
 }
 
-func (f *fakeRuns) Create(context.Context, *domain.SyncRun) error   { return nil }
-func (f *fakeRuns) Update(context.Context, *domain.SyncRun) error   { return nil }
+func (f *fakeRuns) Create(context.Context, *domain.SyncRun) error                    { return nil }
+func (f *fakeRuns) Update(context.Context, *domain.SyncRun) error                    { return nil }
+func (f *fakeRuns) CreateSkippedRows(context.Context, []domain.SyncSkippedRow) error { return nil }
+func (f *fakeRuns) ListSkippedRows(context.Context, string, int, int) ([]domain.SyncSkippedRow, error) {
+	return nil, f.err
+}
 func (f *fakeRuns) Latest(context.Context) (*domain.SyncRun, error) { return nil, nil }
 func (f *fakeRuns) LatestSuccess(context.Context) (*domain.SyncRun, error) {
 	return f.latestSuccess, f.err

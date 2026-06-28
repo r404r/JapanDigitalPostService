@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	stdsync "sync"
 	"time"
@@ -275,15 +276,20 @@ func (e *Engine) execute(ctx context.Context, run *domain.SyncRun, syncType doma
 	e.logger.Info("sync started", "run_id", run.ID, "type", syncType, "trigger", run.Trigger)
 
 	// 每次运行前解析有效配置（DB 覆盖 > env > 默认），避免启动期把 URL / 重试冻死。
-	fullURL := e.resolveRuntime(ctx)
+	settings := e.resolveRuntime(ctx)
+	applyOpt, optErr := applyOptions(settings.TownSkipRegex, "")
 
 	var res ApplyResult
-	var err error
+	var err error = optErr
 	switch syncType {
 	case domain.SyncFull:
-		res, err = e.runFull(ctx, run, fullURL)
+		if err == nil {
+			res, err = e.runFull(ctx, run, settings.FullURL, withSourceType(applyOpt, "full"))
+		}
 	case domain.SyncDiff:
-		res, err = e.runDiff(ctx, run, fullURL)
+		if err == nil {
+			res, err = e.runDiff(ctx, run, settings.FullURL, applyOpt)
+		}
 	default:
 		err = fmt.Errorf("unknown sync type %q", syncType)
 	}
@@ -294,7 +300,17 @@ func (e *Engine) execute(ctx context.Context, run *domain.SyncRun, syncType doma
 	run.RowsAdded = res.Added
 	run.RowsUpdated = res.Updated
 	run.RowsDeleted = res.Deleted
+	run.RowsSkipped = res.Skipped
 	run.RowsTotal = res.Total
+	persistCtx, cancel := persistContext(ctx)
+	defer cancel()
+	e.attachRunIDAndTime(run.ID, finished, res.SkippedRows)
+	if serr := e.runs.CreateSkippedRows(persistCtx, res.SkippedRows); serr != nil {
+		e.logger.Error("create skipped rows", "run_id", run.ID, "err", serr)
+		if err == nil {
+			err = serr
+		}
+	}
 	if err != nil {
 		run.Status = domain.StatusFailed
 		run.ErrorMessage = err.Error()
@@ -302,15 +318,9 @@ func (e *Engine) execute(ctx context.Context, run *domain.SyncRun, syncType doma
 	} else {
 		run.Status = domain.StatusSuccess
 		e.logger.Info("sync succeeded", "run_id", run.ID, "type", run.Type,
-			"added", res.Added, "updated", res.Updated, "deleted", res.Deleted, "total", res.Total)
+			"added", res.Added, "updated", res.Updated, "deleted", res.Deleted, "skipped", res.Skipped, "total", res.Total)
 	}
-	updateCtx := ctx
-	var cancel context.CancelFunc
-	if ctx.Err() != nil {
-		updateCtx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-	}
-	if uerr := e.runs.Update(updateCtx, run); uerr != nil {
+	if uerr := e.runs.Update(persistCtx, run); uerr != nil {
 		e.logger.Error("update sync run", "run_id", run.ID, "err", uerr)
 		if err == nil {
 			err = uerr
@@ -319,31 +329,42 @@ func (e *Engine) execute(ctx context.Context, run *domain.SyncRun, syncType doma
 	return err
 }
 
+type runtimeSyncSettings struct {
+	FullURL       string
+	TownSkipRegex string
+}
+
 // resolveRuntime 解析本次运行的有效全量 URL，并把有效下载重试次数注入 fetcher。
 // 无 resolver（测试/降级）或解析失败时，回退到构造时的静态配置，且不打断同步。
-func (e *Engine) resolveRuntime(ctx context.Context) (fullURL string) {
-	fullURL = e.opt.FullURL
+func (e *Engine) resolveRuntime(ctx context.Context) runtimeSyncSettings {
+	out := runtimeSyncSettings{FullURL: e.opt.FullURL}
 	if e.resolver == nil {
-		return fullURL
+		return out
 	}
 	eff, err := e.resolver.ResolveSyncSettings(ctx)
 	if err != nil {
 		e.logger.Warn("resolve runtime settings failed; using static config", "err", err)
-		return fullURL
+		return out
 	}
 	if eff.ScrapeFullURL != "" {
-		fullURL = eff.ScrapeFullURL
+		out.FullURL = eff.ScrapeFullURL
 	}
+	out.TownSkipRegex = strings.TrimSpace(eff.TownSkipRegex)
 	if rc, ok := e.fetcher.(retryConfigurable); ok {
 		rc.SetMaxRetry(eff.DownloadMaxRetry)
 	}
-	return fullURL
+	return out
 }
 
 func (e *Engine) executeUpload(ctx context.Context, run *domain.SyncRun, start time.Time, csv io.Reader) error {
 	e.logger.Info("sync upload started", "run_id", run.ID, "source", run.SourceURL)
 
-	res, err := ApplyFull(ctx, e.addresses, csv, e.opt.BatchSize, e.opt.FullPrune, e.opt.FullMinRows)
+	settings := e.resolveRuntime(ctx)
+	applyOpt, err := applyOptions(settings.TownSkipRegex, "full")
+	var res ApplyResult
+	if err == nil {
+		res, err = ApplyFullWithOptions(ctx, e.addresses, csv, e.opt.BatchSize, e.opt.FullPrune, e.opt.FullMinRows, applyOpt)
+	}
 	return e.finishUpload(ctx, run, start, res, err)
 }
 
@@ -354,7 +375,17 @@ func (e *Engine) finishUpload(ctx context.Context, run *domain.SyncRun, start ti
 	run.RowsAdded = res.Added
 	run.RowsUpdated = res.Updated
 	run.RowsDeleted = res.Deleted
+	run.RowsSkipped = res.Skipped
 	run.RowsTotal = res.Total
+	persistCtx, cancel := persistContext(ctx)
+	defer cancel()
+	e.attachRunIDAndTime(run.ID, finished, res.SkippedRows)
+	if serr := e.runs.CreateSkippedRows(persistCtx, res.SkippedRows); serr != nil {
+		e.logger.Error("create skipped rows", "run_id", run.ID, "err", serr)
+		if err == nil {
+			err = serr
+		}
+	}
 	if err != nil {
 		run.Status = domain.StatusFailed
 		run.ErrorMessage = err.Error()
@@ -362,15 +393,9 @@ func (e *Engine) finishUpload(ctx context.Context, run *domain.SyncRun, start ti
 	} else {
 		run.Status = domain.StatusSuccess
 		e.logger.Info("sync upload succeeded", "run_id", run.ID,
-			"added", res.Added, "updated", res.Updated, "deleted", res.Deleted, "total", res.Total)
+			"added", res.Added, "updated", res.Updated, "deleted", res.Deleted, "skipped", res.Skipped, "total", res.Total)
 	}
-	updateCtx := ctx
-	var cancel context.CancelFunc
-	if ctx.Err() != nil {
-		updateCtx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-	}
-	if uerr := e.runs.Update(updateCtx, run); uerr != nil {
+	if uerr := e.runs.Update(persistCtx, run); uerr != nil {
 		e.logger.Error("update sync upload run", "run_id", run.ID, "err", uerr)
 		if err == nil {
 			err = uerr
@@ -412,7 +437,7 @@ func uploadCSV(filename string, data []byte) ([]byte, error) {
 	}
 }
 
-func (e *Engine) runFull(ctx context.Context, run *domain.SyncRun, fullURL string) (ApplyResult, error) {
+func (e *Engine) runFull(ctx context.Context, run *domain.SyncRun, fullURL string, opt ApplyOptions) (ApplyResult, error) {
 	src, err := e.fetcher.Fetch(ctx, fullURL)
 	if err != nil {
 		return ApplyResult{}, fmt.Errorf("download full: %w", err)
@@ -421,10 +446,10 @@ func (e *Engine) runFull(ctx context.Context, run *domain.SyncRun, fullURL strin
 	run.SourceURL = src.URL
 	run.FileChecksum = src.Checksum
 	run.FileSize = src.Size
-	return ApplyFull(ctx, e.addresses, src.CSV, e.opt.BatchSize, e.opt.FullPrune, e.opt.FullMinRows)
+	return ApplyFullWithOptions(ctx, e.addresses, src.CSV, e.opt.BatchSize, e.opt.FullPrune, e.opt.FullMinRows, withSourceType(opt, "full"))
 }
 
-func (e *Engine) runDiff(ctx context.Context, run *domain.SyncRun, fullURL string) (ApplyResult, error) {
+func (e *Engine) runDiff(ctx context.Context, run *domain.SyncRun, fullURL string, opt ApplyOptions) (ApplyResult, error) {
 	months := monthsWindow(e.now(), e.opt.DiffLookbackMonths)
 	var agg ApplyResult
 	applied := 0
@@ -459,7 +484,7 @@ func (e *Engine) runDiff(ctx context.Context, run *domain.SyncRun, fullURL strin
 			delCSV = delSrc.CSV
 		}
 
-		res, aerr := ApplyDiff(ctx, e.addresses, addCSV, delCSV, e.opt.BatchSize)
+		res, aerr := ApplyDiffWithOptions(ctx, e.addresses, addCSV, delCSV, e.opt.BatchSize, withSourceType(opt, "add"))
 		if addSrc != nil {
 			addSrc.CSV.Close()
 		}
@@ -472,7 +497,9 @@ func (e *Engine) runDiff(ctx context.Context, run *domain.SyncRun, fullURL strin
 		agg.Added += res.Added
 		agg.Updated += res.Updated
 		agg.Deleted += res.Deleted
+		agg.Skipped += res.Skipped
 		agg.Total += res.Total
+		agg.SkippedRows = append(agg.SkippedRows, res.SkippedRows...)
 		applied++
 		lastPeriod = ym
 	}
@@ -481,7 +508,7 @@ func (e *Engine) runDiff(ctx context.Context, run *domain.SyncRun, fullURL strin
 		if e.opt.DiffFallbackFull {
 			e.logger.Warn("no diff available in window, falling back to full", "months", months)
 			run.Type = domain.SyncFull
-			return e.runFull(ctx, run, fullURL)
+			return e.runFull(ctx, run, fullURL, withSourceType(opt, "full"))
 		}
 		return agg, fmt.Errorf("no diff source available for months %v (fallback disabled)", months)
 	}
@@ -496,6 +523,39 @@ func (e *Engine) runDiff(ctx context.Context, run *domain.SyncRun, fullURL strin
 func (e *Engine) holder() string {
 	host, _ := os.Hostname()
 	return fmt.Sprintf("%s/%s", host, e.newID())
+}
+
+func applyOptions(pattern, sourceType string) (ApplyOptions, error) {
+	pattern = strings.TrimSpace(pattern)
+	opt := ApplyOptions{TownSkipPattern: pattern, SourceType: sourceType}
+	if pattern == "" {
+		return opt, nil
+	}
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return opt, fmt.Errorf("compile town skip regex: %w", err)
+	}
+	opt.TownSkipRegex = re
+	return opt, nil
+}
+
+func withSourceType(opt ApplyOptions, sourceType string) ApplyOptions {
+	opt.SourceType = sourceType
+	return opt
+}
+
+func persistContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if ctx.Err() == nil {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(context.Background(), 10*time.Second)
+}
+
+func (e *Engine) attachRunIDAndTime(runID string, createdAt time.Time, rows []domain.SyncSkippedRow) {
+	for i := range rows {
+		rows[i].RunID = runID
+		rows[i].CreatedAt = createdAt
+	}
 }
 
 // monthsWindow 返回从 (now - (n-1) 月) 到 now 的 YYMM 列表，按时间升序。
