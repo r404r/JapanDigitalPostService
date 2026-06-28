@@ -188,6 +188,19 @@ func TestUpdate_RejectsInvalidURLs(t *testing.T) {
 	}
 }
 
+func TestUpdate_RejectsInvalidTownSkipRegex(t *testing.T) {
+	repo := newFakeRepo()
+	svc := newService(repo)
+	pattern := "["
+	_, err := svc.Update(context.Background(), UpdateInput{TownSkipRegex: &pattern})
+	if !IsValidation(err) {
+		t.Fatalf("err=%v, want validation error", err)
+	}
+	if _, ok := repo.data[domain.SettingTownSkipRegex]; ok {
+		t.Fatal("invalid town_skip_regex should not be stored")
+	}
+}
+
 // Given 越界重试次数 When Update Then 拒绝（0..10 边界）。
 func TestUpdate_RejectsRetryOutOfRange(t *testing.T) {
 	for _, n := range []int{-1, 11, 100} {

@@ -42,6 +42,14 @@ func (f *blockingFetcher) Fetch(ctx context.Context, url string) (*SourceFile, e
 	return nil, ctx.Err()
 }
 
+type staticSettingsResolver struct {
+	settings domain.EffectiveSyncSettings
+}
+
+func (r staticSettingsResolver) ResolveSyncSettings(context.Context) (domain.EffectiveSyncSettings, error) {
+	return r.settings, nil
+}
+
 const (
 	rowA = `01101,"060  ","0600000","ホッカイドウ","サッポロシチュウオウク","イカニケイサイガナイバアイ","北海道","札幌市中央区","以下に掲載がない場合",0,0,0,0,0,0`
 	rowB = `01101,"064  ","0640941","ホッカイドウ","サッポロシチュウオウク","アサヒガオカ","北海道","札幌市中央区","旭ケ丘",0,0,1,0,0,0`
@@ -239,6 +247,126 @@ func TestEngineFullKeepsDistinctReadings(t *testing.T) {
 	}
 	if run2.RowsUpdated != 0 || run2.RowsAdded != 0 || run2.RowsDeleted != 0 {
 		t.Errorf("rerun counts a=%d u=%d d=%d, want 0/0/0", run2.RowsAdded, run2.RowsUpdated, run2.RowsDeleted)
+	}
+}
+
+func TestEngineFullSkipsTownRegexAndLogsRows(t *testing.T) {
+	st := openTestStore(t)
+	full := strings.Join([]string{rowA, rowB, rowC}, "\n") + "\n"
+	e := newTestEngine(t, st, map[string]string{"full": full})
+	e.UseSettingsResolver(staticSettingsResolver{settings: domain.EffectiveSyncSettings{
+		ScrapeFullURL:    "full",
+		DownloadMaxRetry: 3,
+		TownSkipRegex:    "旭ケ丘",
+	}})
+
+	run, err := e.Run(context.Background(), domain.SyncFull, domain.TriggerManual)
+	if err != nil {
+		t.Fatalf("full run: %v", err)
+	}
+	if run.RowsTotal != 3 || run.RowsAdded != 2 || run.RowsSkipped != 1 {
+		t.Fatalf("counts total/added/skipped = %d/%d/%d, want 3/2/1", run.RowsTotal, run.RowsAdded, run.RowsSkipped)
+	}
+	if got := count(t, st); got != 2 {
+		t.Fatalf("addresses = %d, want 2", got)
+	}
+	rows, err := st.SyncRuns().ListSkippedRows(context.Background(), run.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("ListSkippedRows: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("skipped rows len=%d, want 1", len(rows))
+	}
+	if rows[0].Town != "旭ケ丘" || rows[0].LineNumber != 2 || rows[0].Pattern != "旭ケ丘" || rows[0].RawRecordJSON == "" {
+		t.Fatalf("skipped row = %+v, want rowB audit fields", rows[0])
+	}
+}
+
+func TestEngineDiffAddSkipAndDeleteUnaffectedByTownRegex(t *testing.T) {
+	st := openTestStore(t)
+	files := map[string]string{
+		"full":     strings.Join([]string{rowA, rowB, rowC}, "\n") + "\n",
+		"del_2605": rowC + "\n",
+		"add_2605": strings.Join([]string{rowBmod, rowD}, "\n") + "\n",
+	}
+	e := newTestEngine(t, st, files)
+	if _, err := e.Run(context.Background(), domain.SyncFull, domain.TriggerManual); err != nil {
+		t.Fatal(err)
+	}
+	e.UseSettingsResolver(staticSettingsResolver{settings: domain.EffectiveSyncSettings{
+		ScrapeFullURL:    "full",
+		DownloadMaxRetry: 3,
+		TownSkipRegex:    "川原町|岡崎駅前",
+	}})
+
+	run, err := e.Run(context.Background(), domain.SyncDiff, domain.TriggerSchedule)
+	if err != nil {
+		t.Fatalf("diff run: %v", err)
+	}
+	if run.RowsDeleted != 1 || run.RowsUpdated != 1 || run.RowsAdded != 0 || run.RowsSkipped != 1 || run.RowsTotal != 3 {
+		t.Fatalf("counts d/u/a/skipped/total = %d/%d/%d/%d/%d, want 1/1/0/1/3",
+			run.RowsDeleted, run.RowsUpdated, run.RowsAdded, run.RowsSkipped, run.RowsTotal)
+	}
+	if got := count(t, st); got != 2 {
+		t.Fatalf("addresses = %d, want 2 (rowC deleted, rowD skipped)", got)
+	}
+	rows, err := st.SyncRuns().ListSkippedRows(context.Background(), run.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("ListSkippedRows: %v", err)
+	}
+	if len(rows) != 1 || rows[0].Town != "岡崎駅前" || rows[0].SourceType != "add" {
+		t.Fatalf("skipped rows = %+v, want only add rowD", rows)
+	}
+}
+
+func TestEngineUploadSkipsTownRegexAndLogsRows(t *testing.T) {
+	st := openTestStore(t)
+	e := newTestEngine(t, st, nil)
+	e.UseSettingsResolver(staticSettingsResolver{settings: domain.EffectiveSyncSettings{
+		ScrapeFullURL:    "full",
+		DownloadMaxRetry: 3,
+		TownSkipRegex:    "旭ケ丘",
+	}})
+	csv := []byte(strings.Join([]string{rowA, rowB}, "\n") + "\n")
+
+	run, err := e.UploadFull(context.Background(), "utf_ken_all.csv", csv)
+	if err != nil {
+		t.Fatalf("upload: %v", err)
+	}
+	if run.RowsAdded != 1 || run.RowsSkipped != 1 || run.RowsTotal != 2 {
+		t.Fatalf("counts added/skipped/total = %d/%d/%d, want 1/1/2", run.RowsAdded, run.RowsSkipped, run.RowsTotal)
+	}
+	rows, err := st.SyncRuns().ListSkippedRows(context.Background(), run.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("ListSkippedRows: %v", err)
+	}
+	if len(rows) != 1 || rows[0].Town != "旭ケ丘" || rows[0].SourceType != "upload" {
+		t.Fatalf("skipped rows = %+v, want upload rowB", rows)
+	}
+}
+
+func TestEngineFullSkipPruneDeletesExistingMatchingRows(t *testing.T) {
+	st := openTestStore(t)
+	full := strings.Join([]string{rowA, rowB, rowC}, "\n") + "\n"
+	e := newTestEngine(t, st, map[string]string{"full": full})
+	if _, err := e.Run(context.Background(), domain.SyncFull, domain.TriggerManual); err != nil {
+		t.Fatal(err)
+	}
+	e.UseSettingsResolver(staticSettingsResolver{settings: domain.EffectiveSyncSettings{
+		ScrapeFullURL:    "full",
+		DownloadMaxRetry: 3,
+		TownSkipRegex:    "旭ケ丘",
+	}})
+
+	run, err := e.Run(context.Background(), domain.SyncFull, domain.TriggerManual)
+	if err != nil {
+		t.Fatalf("full rerun with skip: %v", err)
+	}
+	if run.RowsSkipped != 1 || run.RowsDeleted != 1 || run.RowsTotal != 3 {
+		t.Fatalf("counts skipped/deleted/total = %d/%d/%d, want 1/1/3", run.RowsSkipped, run.RowsDeleted, run.RowsTotal)
+	}
+	if got := count(t, st); got != 2 {
+		t.Fatalf("addresses = %d, want 2 (existing matched row pruned)", got)
 	}
 }
 

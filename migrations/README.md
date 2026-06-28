@@ -13,6 +13,8 @@
 - `0002_runtime_settings.sqlite.sql` / `0002_runtime_settings.postgres.sql` / `0002_runtime_settings.mysql.sql`
   —— 管理画面可配置、重启后保留的运行时设置表 `runtime_settings(key PK, value, updated_at)`，
   与 `internal/domain.RuntimeSetting` / GORM AutoMigrate 一一对应。MySQL 下 `key` 为保留字需反引号。
+- `0003_sync_skipped_rows.sqlite.sql` / `0003_sync_skipped_rows.postgres.sql` / `0003_sync_skipped_rows.mysql.sql`
+  —— 为同步运行增加 `sync_runs.rows_skipped`，并新增 `sync_skipped_rows` 记录按町域名正则跳过的导入明细。
 
 关键约束（与 `internal/domain` 模型一致）：
 

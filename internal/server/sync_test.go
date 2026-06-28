@@ -35,6 +35,7 @@ func (f fakeReader) CountAll(context.Context) (int, error) { return f.count, f.e
 // fakeRuns 实现 domain.SyncRunRepository（状态/历史读侧）。
 type fakeRuns struct {
 	list          []domain.SyncRun
+	skipped       []domain.SyncSkippedRow
 	running       int64
 	latestSuccess *domain.SyncRun
 	lastLimit     int
@@ -42,8 +43,13 @@ type fakeRuns struct {
 	err           error
 }
 
-func (f *fakeRuns) Create(context.Context, *domain.SyncRun) error   { return nil }
-func (f *fakeRuns) Update(context.Context, *domain.SyncRun) error   { return nil }
+func (f *fakeRuns) Create(context.Context, *domain.SyncRun) error                    { return nil }
+func (f *fakeRuns) Update(context.Context, *domain.SyncRun) error                    { return nil }
+func (f *fakeRuns) CreateSkippedRows(context.Context, []domain.SyncSkippedRow) error { return nil }
+func (f *fakeRuns) ListSkippedRows(_ context.Context, _ string, limit, offset int) ([]domain.SyncSkippedRow, error) {
+	f.lastLimit, f.lastOffset = limit, offset
+	return f.skipped, f.err
+}
 func (f *fakeRuns) Latest(context.Context) (*domain.SyncRun, error) { return nil, nil }
 func (f *fakeRuns) LatestSuccess(context.Context) (*domain.SyncRun, error) {
 	return f.latestSuccess, f.err
@@ -235,6 +241,26 @@ func TestSyncRuns_BadLimit(t *testing.T) {
 	_ = json.NewDecoder(rec.Body).Decode(&body)
 	if body.Status != "invalid_request" {
 		t.Errorf("status=%s, want invalid_request", body.Status)
+	}
+}
+
+func TestSyncSkippedRows(t *testing.T) {
+	runs := &fakeRuns{skipped: []domain.SyncSkippedRow{
+		{RunID: "run-1", SourceType: "upload", LineNumber: 2, Town: "旭ケ丘", Reason: "town_regex", Pattern: "旭", RawRecordJSON: `["raw"]`},
+	}}
+	h, _, read := newSyncRouter(t, Options{AddressReader: fakeReader{}, SyncRuns: runs})
+
+	rec := doAuth(t, h, "GET", "/v1/sync/runs/run-1/skipped?limit=5&offset=10", read, "")
+	if rec.Code != 200 {
+		t.Fatalf("code=%d, want 200", rec.Code)
+	}
+	if runs.lastLimit != 5 || runs.lastOffset != 10 {
+		t.Fatalf("repo got limit=%d offset=%d, want 5/10", runs.lastLimit, runs.lastOffset)
+	}
+	var out []syncSkippedRowDTO
+	_ = json.NewDecoder(rec.Body).Decode(&out)
+	if len(out) != 1 || out[0].Town != "旭ケ丘" || out[0].SourceType != "upload" {
+		t.Fatalf("body=%+v, want upload skipped row", out)
 	}
 }
 

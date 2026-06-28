@@ -55,6 +55,7 @@ type Config struct {
 	DownloadTimeout        time.Duration // DOWNLOAD_TIMEOUT（单次尝试）
 	DownloadMaxRetry       int           // DOWNLOAD_MAX_RETRY
 	DownloadBackoff        time.Duration // DOWNLOAD_RETRY_BACKOFF
+	TownSkipRegex          string        // SYNC_TOWN_SKIP_REGEX（按町域名跳过导入；空=关闭）
 
 	// 认证（task-0006）。
 	AdminBootstrapToken string // ADMIN_BOOTSTRAP_TOKEN: 首个 admin token，引导用
@@ -107,6 +108,7 @@ func Load() Config {
 		DownloadTimeout:        getDuration("DOWNLOAD_TIMEOUT", 60*time.Second),
 		DownloadMaxRetry:       getInt("DOWNLOAD_MAX_RETRY", 3),
 		DownloadBackoff:        getDuration("DOWNLOAD_RETRY_BACKOFF", time.Second),
+		TownSkipRegex:          getEnv("SYNC_TOWN_SKIP_REGEX", ""),
 
 		AdminBootstrapToken: getEnv("ADMIN_BOOTSTRAP_TOKEN", ""),
 

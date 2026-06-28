@@ -39,6 +39,7 @@ type syncRunDTO struct {
 	RowsAdded    int64      `json:"rows_added"`
 	RowsUpdated  int64      `json:"rows_updated"`
 	RowsDeleted  int64      `json:"rows_deleted"`
+	RowsSkipped  int64      `json:"rows_skipped"`
 	RowsTotal    int64      `json:"rows_total"`
 	StartedAt    time.Time  `json:"started_at"`
 	FinishedAt   *time.Time `json:"finished_at"`
@@ -59,11 +60,48 @@ func toSyncRunDTO(r domain.SyncRun) syncRunDTO {
 		RowsAdded:    r.RowsAdded,
 		RowsUpdated:  r.RowsUpdated,
 		RowsDeleted:  r.RowsDeleted,
+		RowsSkipped:  r.RowsSkipped,
 		RowsTotal:    r.RowsTotal,
 		StartedAt:    r.StartedAt,
 		FinishedAt:   r.FinishedAt,
 		DurationMs:   r.DurationMs,
 		ErrorMessage: nilIfEmpty(r.ErrorMessage),
+	}
+}
+
+type syncSkippedRowDTO struct {
+	ID            uint      `json:"id"`
+	RunID         string    `json:"run_id"`
+	SourceType    string    `json:"source_type"`
+	LineNumber    int       `json:"line_number"`
+	Zipcode       string    `json:"zipcode"`
+	JISCode       string    `json:"jis_code"`
+	Prefecture    string    `json:"prefecture"`
+	City          string    `json:"city"`
+	Town          string    `json:"town"`
+	TownKana      string    `json:"town_kana"`
+	Reason        string    `json:"reason"`
+	Pattern       string    `json:"pattern"`
+	RawRecordJSON string    `json:"raw_record_json"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
+func toSyncSkippedRowDTO(r domain.SyncSkippedRow) syncSkippedRowDTO {
+	return syncSkippedRowDTO{
+		ID:            r.ID,
+		RunID:         r.RunID,
+		SourceType:    r.SourceType,
+		LineNumber:    r.LineNumber,
+		Zipcode:       r.Zipcode,
+		JISCode:       r.JISCode,
+		Prefecture:    r.Prefecture,
+		City:          r.City,
+		Town:          r.Town,
+		TownKana:      r.TownKana,
+		Reason:        r.Reason,
+		Pattern:       r.Pattern,
+		RawRecordJSON: r.RawRecordJSON,
+		CreatedAt:     r.CreatedAt,
 	}
 }
 
@@ -134,6 +172,34 @@ func (h *handlers) syncRuns(w http.ResponseWriter, r *http.Request) {
 	out := make([]syncRunDTO, 0, len(runs))
 	for _, run := range runs {
 		out = append(out, toSyncRunDTO(run))
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// syncSkippedRows 处理 GET /v1/sync/runs/{id}/skipped?limit=&offset=（read|admin）。
+func (h *handlers) syncSkippedRows(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), h.queryTimeout)
+	defer cancel()
+
+	limit, ok := parseIntParam(r, "limit")
+	if !ok {
+		h.writeStatusError(w, r, http.StatusBadRequest, "invalid_request", "limit must be an integer")
+		return
+	}
+	offset, ok := parseIntParam(r, "offset")
+	if !ok {
+		h.writeStatusError(w, r, http.StatusBadRequest, "invalid_request", "offset must be an integer")
+		return
+	}
+
+	rows, err := h.runs.ListSkippedRows(ctx, r.PathValue("id"), limit, offset)
+	if err != nil {
+		h.writeStatusError(w, r, http.StatusInternalServerError, "internal_error", "internal error")
+		return
+	}
+	out := make([]syncSkippedRowDTO, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, toSyncSkippedRowDTO(row))
 	}
 	writeJSON(w, http.StatusOK, out)
 }

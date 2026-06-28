@@ -117,6 +117,7 @@ func NewRouter(opts Options) http.Handler {
 	if opts.AddressReader != nil && opts.SyncRuns != nil {
 		mux.Handle("GET /v1/sync/status", read(h.syncStatus))
 		mux.Handle("GET /v1/sync/runs", read(h.syncRuns))
+		mux.Handle("GET /v1/sync/runs/{id}/skipped", read(h.syncSkippedRows))
 	}
 	if opts.SyncTrigger != nil {
 		mux.Handle("POST /v1/sync/trigger", admin(h.syncTrigger))

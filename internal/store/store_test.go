@@ -259,6 +259,21 @@ func TestSyncRunRepository(t *testing.T) {
 	if err != nil || len(list) != 2 || list[0].ID != "2" {
 		t.Fatalf("List = %+v err=%v, want [2,1]", list, err)
 	}
+
+	skipped := []domain.SyncSkippedRow{
+		{RunID: "2", SourceType: "full", LineNumber: 3, Town: "除外町", Reason: "town_regex", Pattern: "除外", RawRecordJSON: `["raw"]`},
+		{RunID: "2", SourceType: "full", LineNumber: 4, Town: "除外町二", Reason: "town_regex", Pattern: "除外", RawRecordJSON: `["raw2"]`},
+	}
+	if err := runs.CreateSkippedRows(ctx, skipped); err != nil {
+		t.Fatalf("CreateSkippedRows: %v", err)
+	}
+	gotSkipped, err := runs.ListSkippedRows(ctx, "2", 1, 1)
+	if err != nil {
+		t.Fatalf("ListSkippedRows: %v", err)
+	}
+	if len(gotSkipped) != 1 || gotSkipped[0].LineNumber != 4 || gotSkipped[0].Town != "除外町二" {
+		t.Fatalf("ListSkippedRows = %+v, want second skipped row", gotSkipped)
+	}
 }
 
 func TestLockMutualExclusion(t *testing.T) {

@@ -37,6 +37,8 @@ type AddressRepository interface {
 type SyncRunRepository interface {
 	Create(ctx context.Context, run *SyncRun) error
 	Update(ctx context.Context, run *SyncRun) error
+	CreateSkippedRows(ctx context.Context, rows []SyncSkippedRow) error
+	ListSkippedRows(ctx context.Context, runID string, limit, offset int) ([]SyncSkippedRow, error)
 	Latest(ctx context.Context) (*SyncRun, error)
 	LatestSuccess(ctx context.Context) (*SyncRun, error)
 	List(ctx context.Context, limit, offset int) ([]SyncRun, error)

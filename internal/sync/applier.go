@@ -2,8 +2,11 @@ package sync
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"regexp"
+	"time"
 
 	"github.com/r404r/JapanDigitalPostService/internal/domain"
 )
@@ -15,7 +18,17 @@ type ApplyResult struct {
 	Updated   int64
 	Unchanged int64
 	Deleted   int64
+	Skipped   int64
 	Total     int64
+}
+
+type ApplyOptions struct {
+	TownSkipRegex   *regexp.Regexp
+	TownSkipPattern string
+	SourceType      string
+	RunID           string
+	SkippedAt       time.Time
+	SkippedRowSink  func([]domain.SyncSkippedRow) error
 }
 
 // applyBatch 对一批地址做幂等分类与 upsert：key 不存在→added；存在但 hash 变化→
@@ -58,6 +71,10 @@ func applyBatch(ctx context.Context, repo domain.AddressRepository, batch []doma
 // ApplyFull 全量应用：流式分批 upsert，并在解析成功且行数达到安全下限 minRows 时
 // 剪除官方文件中已消失的地址（prune）。minRows 防止截断下载误删全表。
 func ApplyFull(ctx context.Context, repo domain.AddressRepository, csv io.Reader, batchSize int, prune bool, minRows int64) (ApplyResult, error) {
+	return ApplyFullWithOptions(ctx, repo, csv, batchSize, prune, minRows, ApplyOptions{SourceType: "full"})
+}
+
+func ApplyFullWithOptions(ctx context.Context, repo domain.AddressRepository, csv io.Reader, batchSize int, prune bool, minRows int64, opt ApplyOptions) (ApplyResult, error) {
 	if batchSize <= 0 {
 		batchSize = 1000
 	}
@@ -80,7 +97,7 @@ func ApplyFull(ctx context.Context, repo domain.AddressRepository, csv io.Reader
 		return nil
 	}
 
-	total, err := ParseStream(csv, func(addr *domain.Address) error {
+	total, err := parseStreamWithOptions(csv, opt, &res, func(addr *domain.Address) error {
 		if seen != nil {
 			seen[addr.Key()] = struct{}{}
 		}
@@ -116,6 +133,10 @@ func ApplyFull(ctx context.Context, repo domain.AddressRepository, csv io.Reader
 // "改名"（旧记录在 del、新记录在 add）最终留下新记录。废止已不存在的记录删除 0 行，
 // 重复应用同一差分幂等。
 func ApplyDiff(ctx context.Context, repo domain.AddressRepository, addCSV, delCSV io.Reader, batchSize int) (ApplyResult, error) {
+	return ApplyDiffWithOptions(ctx, repo, addCSV, delCSV, batchSize, ApplyOptions{SourceType: "add"})
+}
+
+func ApplyDiffWithOptions(ctx context.Context, repo domain.AddressRepository, addCSV, delCSV io.Reader, batchSize int, opt ApplyOptions) (ApplyResult, error) {
 	if batchSize <= 0 {
 		batchSize = 1000
 	}
@@ -151,7 +172,11 @@ func ApplyDiff(ctx context.Context, repo domain.AddressRepository, addCSV, delCS
 			batch = batch[:0]
 			return nil
 		}
-		n, err := ParseStream(addCSV, func(addr *domain.Address) error {
+		addOpt := opt
+		if addOpt.SourceType == "" {
+			addOpt.SourceType = "add"
+		}
+		n, err := parseStreamWithOptions(addCSV, addOpt, &res, func(addr *domain.Address) error {
 			batch = append(batch, *addr)
 			if len(batch) >= batchSize {
 				return flush()
@@ -167,4 +192,56 @@ func ApplyDiff(ctx context.Context, repo domain.AddressRepository, addCSV, delCS
 		res.Total += int64(n)
 	}
 	return res, nil
+}
+
+func parseStreamWithOptions(r io.Reader, opt ApplyOptions, res *ApplyResult, emit func(*domain.Address) error) (int, error) {
+	if opt.SourceType == "" {
+		opt.SourceType = "full"
+	}
+	var skipped []domain.SyncSkippedRow
+	flushSkipped := func() error {
+		if len(skipped) == 0 || opt.SkippedRowSink == nil {
+			skipped = skipped[:0]
+			return nil
+		}
+		if err := opt.SkippedRowSink(skipped); err != nil {
+			return err
+		}
+		skipped = skipped[:0]
+		return nil
+	}
+	total, err := ParseStreamRows(r, func(row ParsedRow) error {
+		if opt.TownSkipRegex != nil && opt.TownSkipRegex.MatchString(row.Address.Town) {
+			res.Skipped++
+			skipped = append(skipped, skippedRow(row, opt))
+			if len(skipped) >= 1000 {
+				return flushSkipped()
+			}
+			return nil
+		}
+		return emit(row.Address)
+	})
+	if ferr := flushSkipped(); err == nil && ferr != nil {
+		err = ferr
+	}
+	return total, err
+}
+
+func skippedRow(row ParsedRow, opt ApplyOptions) domain.SyncSkippedRow {
+	raw, _ := json.Marshal(row.Record)
+	return domain.SyncSkippedRow{
+		RunID:         opt.RunID,
+		SourceType:    opt.SourceType,
+		LineNumber:    row.LineNumber,
+		Zipcode:       row.Address.Zipcode,
+		JISCode:       row.Address.JISCode,
+		Prefecture:    row.Address.Prefecture,
+		City:          row.Address.City,
+		Town:          row.Address.Town,
+		TownKana:      row.Address.TownKana,
+		Reason:        "town_regex",
+		Pattern:       opt.TownSkipPattern,
+		RawRecordJSON: string(raw),
+		CreatedAt:     opt.SkippedAt,
+	}
 }
