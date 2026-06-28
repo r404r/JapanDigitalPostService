@@ -759,53 +759,93 @@ function SyncRunsTable({
   selectedRunID: string | null;
   onShowSkippedRows: (run: SyncRun) => void;
 }) {
+  const [pageIndex, setPageIndex] = useState(0);
+  const totalPages = Math.max(1, Math.ceil(runs.length / syncRunsPageSize));
+  const currentPageRuns = runs.slice(pageIndex * syncRunsPageSize, (pageIndex + 1) * syncRunsPageSize);
+  const canGoPrevious = pageIndex > 0;
+  const canGoNext = pageIndex + 1 < totalPages;
+
+  useEffect(() => {
+    setPageIndex((currentPageIndex) => Math.min(currentPageIndex, totalPages - 1));
+  }, [totalPages]);
+
   return (
-    <div className="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>type</th>
-            <th>status</th>
-            <th>time</th>
-            <th>processed</th>
-            <th>skipped</th>
-            <th>error</th>
-          </tr>
-        </thead>
-        <tbody>
-          {runs.map((run) => {
-            const skipped = skippedRows(run);
-            return (
-              <tr key={run.id}>
-                <td>{run.type}</td>
-                <td>{run.status}</td>
-                <td>{formatDate(run.started_at)} - {formatDate(run.finished_at)}</td>
-                <td>{run.rows_total ?? countRows(run)}</td>
-                <td>
-                  {skipped > 0 ? (
-                    <button
-                      className="table-action"
-                      type="button"
-                      aria-pressed={run.id === selectedRunID}
-                      onClick={() => onShowSkippedRows(run)}
-                    >
-                      除外行を表示
-                    </button>
-                  ) : (
-                    "-"
-                  )}
-                  {skipped > 0 && <span className="skipped-count">{skipped}</span>}
-                </td>
-                <td>{run.error_message ?? "-"}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+    <div className="sync-runs">
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>type</th>
+              <th>status</th>
+              <th>time</th>
+              <th>processed</th>
+              <th>skipped</th>
+              <th>error</th>
+            </tr>
+          </thead>
+          <tbody>
+            {currentPageRuns.map((run) => {
+              const skipped = skippedRows(run);
+              return (
+                <tr key={run.id}>
+                  <td>{run.type}</td>
+                  <td>{run.status}</td>
+                  <td>{formatDate(run.started_at)} - {formatDate(run.finished_at)}</td>
+                  <td>{run.rows_total ?? countRows(run)}</td>
+                  <td>
+                    {skipped > 0 ? (
+                      <span className="skipped-cell">
+                        <span className="skipped-count">{skipped}</span>
+                        <button
+                          className="table-action"
+                          type="button"
+                          aria-pressed={run.id === selectedRunID}
+                          onClick={() => onShowSkippedRows(run)}
+                        >
+                          照会
+                        </button>
+                      </span>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
+                  <td>{run.error_message ?? "-"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {totalPages > 1 && (
+        <div className="table-pagination" aria-label="同期履歴ページ操作">
+          <span>
+            ページ {pageIndex + 1} / {totalPages}
+          </span>
+          <div className="pagination-buttons">
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => setPageIndex((currentPageIndex) => Math.max(0, currentPageIndex - 1))}
+              disabled={!canGoPrevious}
+            >
+              前へ
+            </button>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => setPageIndex((currentPageIndex) => Math.min(totalPages - 1, currentPageIndex + 1))}
+              disabled={!canGoNext}
+            >
+              次へ
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
+const syncRunsPageSize = 6;
 const skippedRowsPageSize = 100;
 
 function SkippedRowsModal({

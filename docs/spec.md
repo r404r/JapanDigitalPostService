@@ -188,7 +188,7 @@ Settings API 可在线配置抓取/导入行为，覆盖值持久化到 DB（`ru
 
 三个页面（最小可用）：
 1. **查询页**：输入邮编/都道府県/市区町村/关键字，展示结果表、OpenAPI 字段 `total_count` / `returned_count` / `items`，并可展示 `items.length` 作为本次返回地址数量；同时展示 `truncated`/`too_many_results`/`timeout` 状态提示。
-2. **同步状态页**：持有 Bearer token 时自动读取同步状态与运行历史；展示 `total_addresses`、最近一次成功同步时间/类型、是否运行中、最新 100 件运行历史（类型、状态、时间、`rows_total` 处理数量、`rows_skipped` 跳过数量、错误摘要），可手动触发 auto/full/diff（admin）。清空 token 时同步状态、历史与过滤明细显示应一并清空，避免保留旧 token 读取到的信息。管理区 UI 将“状态再読込”和“同期実行”分成两个操作区域；`同期方式` 下拉框只影响其同组的「選択した方式で同期実行」按钮，状态再读取不受该选择影响。管理区「取得設定」支持读取、保存、恢复默认 `town_skip_regex`；前端不使用 JavaScript `RegExp` 阻止保存，后端 Go 正则校验错误按 API message 展示。对 `rows_skipped > 0` 的同步运行，页面显示「除外行を表示」入口，并打开「除外行明細」模态窗口；窗口通过 `GET /v1/sync/runs/{id}/skipped?limit=100&offset=N` 按 100 条页大小读取，使用「前へ」/「次へ」分页，`raw_record_json` 默认截断、可展开查看。
+2. **同步状态页**：持有 Bearer token 时自动读取同步状态与运行历史；展示 `total_addresses`、最近一次成功同步时间/类型、是否运行中、最新 100 件运行历史（类型、状态、时间、`rows_total` 处理数量、`rows_skipped` 跳过数量、错误摘要），可手动触发 auto/full/diff（admin）。同步履歴在前端按每页 6 行分页显示，使用「前へ」/「次へ」切换。清空 token 时同步状态、历史与过滤明细显示应一并清空，避免保留旧 token 读取到的信息。管理区 UI 将“状态再読込”和“同期実行”分成两个操作区域；`同期方式` 下拉框只影响其同组的「選択した方式で同期実行」按钮，状态再读取不受该选择影响。管理区「取得設定」支持读取、保存、恢复默认 `town_skip_regex`；前端不使用 JavaScript `RegExp` 阻止保存，后端 Go 正则校验错误按 API message 展示。对 `rows_skipped > 0` 的同步运行，页面在 skipped 数字后显示「照会」入口，并打开「除外行明細」模态窗口；窗口通过 `GET /v1/sync/runs/{id}/skipped?limit=100&offset=N` 按 100 条页大小读取，使用「前へ」/「次へ」分页，`raw_record_json` 默认截断、可展开查看。
 3. **Token 页**：发行 token（明文仅展示一次并提示保存）、脱敏列表、吊销（需 admin）。Token 管理表单将输入控件与操作按钮分为独立视觉/语义组，按钮区与输入区保持清晰间距。
 
 通用行为：
@@ -266,3 +266,4 @@ Settings API 可在线配置抓取/导入行为，覆盖值持久化到 DB（`ru
 | 2026-06-28 | task-0030-plan | 规划 React sample 接入 `town_skip_regex` 与过滤履历明细；澄清 §3.6 当前由 Settings API 支持，Web 管理页接入为 task-0030 待实施，避免把后端能力误写为前端已完成。 |
 | 2026-06-28 | task-0030 | React sample 管理页接入 `town_skip_regex` 设置、`rows_skipped` 展示与过滤明细分页查看；前端不硬阻断 Go 正则，后端校验错误原样展示。无 OpenAPI / docs/api 契约变更。 |
 | 2026-06-29 | task-0031 | React sample 将过滤明细查看改为「除外行明細」模态窗口，并用「前へ」/「次へ」页码式分页替代追加加载。无 OpenAPI / docs/api 契约变更。 |
+| 2026-06-29 | task-0032 | React sample 同步履歴改为每页 6 行分页；skipped 单元格改为先显示数字，再显示「照会」入口。无 OpenAPI / docs/api 契约变更。 |

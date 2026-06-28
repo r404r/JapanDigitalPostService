@@ -528,11 +528,34 @@ label small {
   color: #ffffff;
 }
 
+.sync-runs {
+  display: grid;
+  gap: 14px;
+}
+
+.skipped-cell {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .skipped-count {
-  display: block;
-  margin-top: 6px;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.table-pagination {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.table-pagination span {
+  color: var(--muted);
+  font-size: 0.88rem;
   font-weight: 800;
 }
 
@@ -778,6 +801,11 @@ th {
   }
 
   .modal-footer {
+    display: grid;
+    justify-content: stretch;
+  }
+
+  .table-pagination {
     display: grid;
     justify-content: stretch;
   }

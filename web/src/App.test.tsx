@@ -87,6 +87,22 @@ const skippedRow = (lineNumber: number, overrides: Record<string, unknown> = {})
   ...overrides
 });
 
+const syncRun = (index: number, overrides: Record<string, unknown> = {}) => ({
+  id: `run-${index}`,
+  type: index % 2 === 0 ? "diff" : "full",
+  status: "success",
+  trigger: "manual",
+  rows_added: index,
+  rows_updated: 0,
+  rows_deleted: 0,
+  rows_skipped: 0,
+  rows_total: index,
+  started_at: `2026-06-11T00:00:0${index % 10}Z`,
+  finished_at: `2026-06-11T00:00:1${index % 10}Z`,
+  error_message: `履歴${index}`,
+  ...overrides
+});
+
 describe("App", () => {
   beforeEach(() => {
     sessionStorage.clear();
@@ -432,7 +448,7 @@ describe("App", () => {
     render(<App />);
     await userEvent.click(screen.getByRole("button", { name: "管理" }));
 
-    await userEvent.click(await screen.findByRole("button", { name: "除外行を表示" }));
+    await userEvent.click(await screen.findByRole("button", { name: "照会" }));
     const dialog = await screen.findByRole("dialog", { name: "除外行明細" });
 
     expect(fetch).toHaveBeenCalledWith(
@@ -479,6 +495,54 @@ describe("App", () => {
     expect(screen.queryByRole("dialog", { name: "除外行明細" })).not.toBeInTheDocument();
   });
 
+  it("shows skipped lookup after the count and paginates sync history six rows at a time", async () => {
+    sessionStorage.setItem("apiToken", "admin-token");
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(settingsBody()))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          total_addresses: 42,
+          running: false,
+          last_success_at: "2026-06-11T00:00:00Z",
+          last_type: "full"
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse([
+          syncRun(1, { rows_skipped: 8, rows_total: 18 }),
+          syncRun(2),
+          syncRun(3),
+          syncRun(4),
+          syncRun(5),
+          syncRun(6),
+          syncRun(7)
+        ])
+      );
+
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "管理" }));
+
+    expect(await screen.findByText("履歴1")).toBeInTheDocument();
+    expect(screen.getByText("履歴6")).toBeInTheDocument();
+    expect(screen.queryByText("履歴7")).not.toBeInTheDocument();
+    expect(screen.getByText("ページ 1 / 2")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "前へ" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "次へ" })).toBeEnabled();
+
+    const lookupButton = screen.getByRole("button", { name: "照会" });
+    const skippedCell = lookupButton.closest("td");
+    expect(skippedCell).not.toBeNull();
+    expect(skippedCell?.textContent?.replace(/\s+/g, "")).toBe("8照会");
+
+    await userEvent.click(screen.getByRole("button", { name: "次へ" }));
+
+    expect(await screen.findByText("履歴7")).toBeInTheDocument();
+    expect(screen.queryByText("履歴1")).not.toBeInTheDocument();
+    expect(screen.getByText("ページ 2 / 2")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "次へ" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "前へ" })).toBeEnabled();
+  });
+
   it("clears skipped row details when the bearer token is removed", async () => {
     sessionStorage.setItem("apiToken", "admin-token");
     vi.mocked(fetch)
@@ -513,7 +577,7 @@ describe("App", () => {
 
     render(<App />);
     await userEvent.click(screen.getByRole("button", { name: "管理" }));
-    await userEvent.click(await screen.findByRole("button", { name: "除外行を表示" }));
+    await userEvent.click(await screen.findByRole("button", { name: "照会" }));
     const dialog = await screen.findByRole("dialog", { name: "除外行明細" });
     expect(await within(dialog).findByText("東京都 / 千代田区 / 除外町域1")).toBeInTheDocument();
 
