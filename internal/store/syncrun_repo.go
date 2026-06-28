@@ -39,7 +39,7 @@ func (r *syncRunRepo) ListSkippedRows(ctx context.Context, runID string, limit, 
 	var rows []domain.SyncSkippedRow
 	err := r.db.WithContext(ctx).
 		Where("run_id = ?", runID).
-		Order("line_number ASC").
+		Order("line_number ASC, id ASC").
 		Limit(limit).Offset(offset).
 		Find(&rows).Error
 	return rows, err

@@ -110,7 +110,7 @@
 
 1. **`download_max_retry`**（抓取下载额外重试次数，默认 `3`，有效范围 `0–10`）。校验越界返回 `400 invalid_request`，日语提示「リトライ回数は 0 以上 10 以下の整数で指定してください。」。
 2. **`scrape_full_url`**（全量抓取数据源 URL，默认 = 当前配置的全量 URL）。校验覆盖 SSRF 风险：必须为 `https`、主机属日本邮便官方域名白名单（`www.post.japanpost.jp` / `post.japanpost.jp`）、不含用户名信息；否则返回 `400`，日语提示（如「URL のドメインは日本郵便の公式サイト（post.japanpost.jp）のみ許可されています。」）。
-3. **`town_skip_regex`**（导入时按町域名跳过的 Go 正则，默认空=关闭）。匹配时该行不写入 `addresses`，但会作为同一 `sync_run` 的 `sync_skipped_rows` 明细记录（含行号、地址关键字段、匹配 pattern、原始 CSV record JSON），并计入 `rows_skipped`；可经 `GET /v1/sync/runs/{id}/skipped` 查验。非法正则返回 `400 invalid_request`，日语提示「町域名フィルターの正規表現が正しくありません。」。
+3. **`town_skip_regex`**（导入时按町域名跳过的 Go 正则，默认空=关闭）。匹配时该行不写入 `addresses`，但会作为同一 `sync_run` 的 `sync_skipped_rows` 明细记录（含行号、地址关键字段、匹配 pattern、原始 CSV record JSON），并计入 `rows_skipped`；可经 `GET /v1/sync/runs/{id}/skipped` 查验。非法正则返回 `400 invalid_request`，日语提示「町域名フィルターの正規表現が正しくありません。」。全量同步启用 prune 时，匹配行不会进入保留集合，库中既有的同键匹配记录会被剪除并计入 `rows_deleted`；对应源行仍记录在 `sync_skipped_rows` 中用于审计。
 
 **优先级**：有效值 = DB 覆盖 > env > 代码默认（详见 architecture §9.1）。
 

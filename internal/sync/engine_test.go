@@ -282,6 +282,94 @@ func TestEngineFullSkipsTownRegexAndLogsRows(t *testing.T) {
 	}
 }
 
+func TestEngineDiffAddSkipAndDeleteUnaffectedByTownRegex(t *testing.T) {
+	st := openTestStore(t)
+	files := map[string]string{
+		"full":     strings.Join([]string{rowA, rowB, rowC}, "\n") + "\n",
+		"del_2605": rowC + "\n",
+		"add_2605": strings.Join([]string{rowBmod, rowD}, "\n") + "\n",
+	}
+	e := newTestEngine(t, st, files)
+	if _, err := e.Run(context.Background(), domain.SyncFull, domain.TriggerManual); err != nil {
+		t.Fatal(err)
+	}
+	e.UseSettingsResolver(staticSettingsResolver{settings: domain.EffectiveSyncSettings{
+		ScrapeFullURL:    "full",
+		DownloadMaxRetry: 3,
+		TownSkipRegex:    "川原町|岡崎駅前",
+	}})
+
+	run, err := e.Run(context.Background(), domain.SyncDiff, domain.TriggerSchedule)
+	if err != nil {
+		t.Fatalf("diff run: %v", err)
+	}
+	if run.RowsDeleted != 1 || run.RowsUpdated != 1 || run.RowsAdded != 0 || run.RowsSkipped != 1 || run.RowsTotal != 3 {
+		t.Fatalf("counts d/u/a/skipped/total = %d/%d/%d/%d/%d, want 1/1/0/1/3",
+			run.RowsDeleted, run.RowsUpdated, run.RowsAdded, run.RowsSkipped, run.RowsTotal)
+	}
+	if got := count(t, st); got != 2 {
+		t.Fatalf("addresses = %d, want 2 (rowC deleted, rowD skipped)", got)
+	}
+	rows, err := st.SyncRuns().ListSkippedRows(context.Background(), run.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("ListSkippedRows: %v", err)
+	}
+	if len(rows) != 1 || rows[0].Town != "岡崎駅前" || rows[0].SourceType != "add" {
+		t.Fatalf("skipped rows = %+v, want only add rowD", rows)
+	}
+}
+
+func TestEngineUploadSkipsTownRegexAndLogsRows(t *testing.T) {
+	st := openTestStore(t)
+	e := newTestEngine(t, st, nil)
+	e.UseSettingsResolver(staticSettingsResolver{settings: domain.EffectiveSyncSettings{
+		ScrapeFullURL:    "full",
+		DownloadMaxRetry: 3,
+		TownSkipRegex:    "旭ケ丘",
+	}})
+	csv := []byte(strings.Join([]string{rowA, rowB}, "\n") + "\n")
+
+	run, err := e.UploadFull(context.Background(), "utf_ken_all.csv", csv)
+	if err != nil {
+		t.Fatalf("upload: %v", err)
+	}
+	if run.RowsAdded != 1 || run.RowsSkipped != 1 || run.RowsTotal != 2 {
+		t.Fatalf("counts added/skipped/total = %d/%d/%d, want 1/1/2", run.RowsAdded, run.RowsSkipped, run.RowsTotal)
+	}
+	rows, err := st.SyncRuns().ListSkippedRows(context.Background(), run.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("ListSkippedRows: %v", err)
+	}
+	if len(rows) != 1 || rows[0].Town != "旭ケ丘" || rows[0].SourceType != "upload" {
+		t.Fatalf("skipped rows = %+v, want upload rowB", rows)
+	}
+}
+
+func TestEngineFullSkipPruneDeletesExistingMatchingRows(t *testing.T) {
+	st := openTestStore(t)
+	full := strings.Join([]string{rowA, rowB, rowC}, "\n") + "\n"
+	e := newTestEngine(t, st, map[string]string{"full": full})
+	if _, err := e.Run(context.Background(), domain.SyncFull, domain.TriggerManual); err != nil {
+		t.Fatal(err)
+	}
+	e.UseSettingsResolver(staticSettingsResolver{settings: domain.EffectiveSyncSettings{
+		ScrapeFullURL:    "full",
+		DownloadMaxRetry: 3,
+		TownSkipRegex:    "旭ケ丘",
+	}})
+
+	run, err := e.Run(context.Background(), domain.SyncFull, domain.TriggerManual)
+	if err != nil {
+		t.Fatalf("full rerun with skip: %v", err)
+	}
+	if run.RowsSkipped != 1 || run.RowsDeleted != 1 || run.RowsTotal != 3 {
+		t.Fatalf("counts skipped/deleted/total = %d/%d/%d, want 1/1/3", run.RowsSkipped, run.RowsDeleted, run.RowsTotal)
+	}
+	if got := count(t, st); got != 2 {
+		t.Fatalf("addresses = %d, want 2 (existing matched row pruned)", got)
+	}
+}
+
 // TestMonthsWindow 覆盖 Finding 1：月末日期回退不得因短月归一化跳月/重复。
 func TestMonthsWindow(t *testing.T) {
 	cases := []struct {

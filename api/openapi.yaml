@@ -345,7 +345,7 @@ components:
       properties:
         id: { type: integer }
         run_id: { type: string }
-        source_type: { type: string, enum: [full, add] }
+        source_type: { type: string, enum: [full, add, upload] }
         line_number: { type: integer }
         zipcode: { type: string }
         jis_code: { type: string }

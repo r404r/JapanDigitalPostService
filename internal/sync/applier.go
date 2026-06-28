@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"time"
 
 	"github.com/r404r/JapanDigitalPostService/internal/domain"
 )
@@ -13,19 +14,21 @@ import (
 // ApplyResult 汇总一次应用的计数。Unchanged 不入 sync_runs（schema 无此列），
 // 但用于验证幂等重跑（重跑应全部 Unchanged）。
 type ApplyResult struct {
-	Added       int64
-	Updated     int64
-	Unchanged   int64
-	Deleted     int64
-	Skipped     int64
-	Total       int64
-	SkippedRows []domain.SyncSkippedRow
+	Added     int64
+	Updated   int64
+	Unchanged int64
+	Deleted   int64
+	Skipped   int64
+	Total     int64
 }
 
 type ApplyOptions struct {
 	TownSkipRegex   *regexp.Regexp
 	TownSkipPattern string
 	SourceType      string
+	RunID           string
+	SkippedAt       time.Time
+	SkippedRowSink  func([]domain.SyncSkippedRow) error
 }
 
 // applyBatch 对一批地址做幂等分类与 upsert：key 不存在→added；存在但 hash 变化→
@@ -195,19 +198,39 @@ func parseStreamWithOptions(r io.Reader, opt ApplyOptions, res *ApplyResult, emi
 	if opt.SourceType == "" {
 		opt.SourceType = "full"
 	}
-	return ParseStreamRows(r, func(row ParsedRow) error {
+	var skipped []domain.SyncSkippedRow
+	flushSkipped := func() error {
+		if len(skipped) == 0 || opt.SkippedRowSink == nil {
+			skipped = skipped[:0]
+			return nil
+		}
+		if err := opt.SkippedRowSink(skipped); err != nil {
+			return err
+		}
+		skipped = skipped[:0]
+		return nil
+	}
+	total, err := ParseStreamRows(r, func(row ParsedRow) error {
 		if opt.TownSkipRegex != nil && opt.TownSkipRegex.MatchString(row.Address.Town) {
 			res.Skipped++
-			res.SkippedRows = append(res.SkippedRows, skippedRow(row, opt))
+			skipped = append(skipped, skippedRow(row, opt))
+			if len(skipped) >= 1000 {
+				return flushSkipped()
+			}
 			return nil
 		}
 		return emit(row.Address)
 	})
+	if ferr := flushSkipped(); err == nil && ferr != nil {
+		err = ferr
+	}
+	return total, err
 }
 
 func skippedRow(row ParsedRow, opt ApplyOptions) domain.SyncSkippedRow {
 	raw, _ := json.Marshal(row.Record)
 	return domain.SyncSkippedRow{
+		RunID:         opt.RunID,
 		SourceType:    opt.SourceType,
 		LineNumber:    row.LineNumber,
 		Zipcode:       row.Address.Zipcode,
@@ -219,5 +242,6 @@ func skippedRow(row ParsedRow, opt ApplyOptions) domain.SyncSkippedRow {
 		Reason:        "town_regex",
 		Pattern:       opt.TownSkipPattern,
 		RawRecordJSON: string(raw),
+		CreatedAt:     opt.SkippedAt,
 	}
 }

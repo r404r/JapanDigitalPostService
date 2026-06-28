@@ -277,7 +277,7 @@ func (e *Engine) execute(ctx context.Context, run *domain.SyncRun, syncType doma
 
 	// 每次运行前解析有效配置（DB 覆盖 > env > 默认），避免启动期把 URL / 重试冻死。
 	settings := e.resolveRuntime(ctx)
-	applyOpt, optErr := applyOptions(settings.TownSkipRegex, "")
+	applyOpt, optErr := e.applyOptions(settings.TownSkipRegex, "", run.ID, start, ctx)
 
 	var res ApplyResult
 	var err error = optErr
@@ -304,13 +304,6 @@ func (e *Engine) execute(ctx context.Context, run *domain.SyncRun, syncType doma
 	run.RowsTotal = res.Total
 	persistCtx, cancel := persistContext(ctx)
 	defer cancel()
-	e.attachRunIDAndTime(run.ID, finished, res.SkippedRows)
-	if serr := e.runs.CreateSkippedRows(persistCtx, res.SkippedRows); serr != nil {
-		e.logger.Error("create skipped rows", "run_id", run.ID, "err", serr)
-		if err == nil {
-			err = serr
-		}
-	}
 	if err != nil {
 		run.Status = domain.StatusFailed
 		run.ErrorMessage = err.Error()
@@ -360,7 +353,7 @@ func (e *Engine) executeUpload(ctx context.Context, run *domain.SyncRun, start t
 	e.logger.Info("sync upload started", "run_id", run.ID, "source", run.SourceURL)
 
 	settings := e.resolveRuntime(ctx)
-	applyOpt, err := applyOptions(settings.TownSkipRegex, "full")
+	applyOpt, err := e.applyOptions(settings.TownSkipRegex, "upload", run.ID, start, ctx)
 	var res ApplyResult
 	if err == nil {
 		res, err = ApplyFullWithOptions(ctx, e.addresses, csv, e.opt.BatchSize, e.opt.FullPrune, e.opt.FullMinRows, applyOpt)
@@ -379,13 +372,6 @@ func (e *Engine) finishUpload(ctx context.Context, run *domain.SyncRun, start ti
 	run.RowsTotal = res.Total
 	persistCtx, cancel := persistContext(ctx)
 	defer cancel()
-	e.attachRunIDAndTime(run.ID, finished, res.SkippedRows)
-	if serr := e.runs.CreateSkippedRows(persistCtx, res.SkippedRows); serr != nil {
-		e.logger.Error("create skipped rows", "run_id", run.ID, "err", serr)
-		if err == nil {
-			err = serr
-		}
-	}
 	if err != nil {
 		run.Status = domain.StatusFailed
 		run.ErrorMessage = err.Error()
@@ -499,7 +485,6 @@ func (e *Engine) runDiff(ctx context.Context, run *domain.SyncRun, fullURL strin
 		agg.Deleted += res.Deleted
 		agg.Skipped += res.Skipped
 		agg.Total += res.Total
-		agg.SkippedRows = append(agg.SkippedRows, res.SkippedRows...)
 		applied++
 		lastPeriod = ym
 	}
@@ -525,9 +510,17 @@ func (e *Engine) holder() string {
 	return fmt.Sprintf("%s/%s", host, e.newID())
 }
 
-func applyOptions(pattern, sourceType string) (ApplyOptions, error) {
+func (e *Engine) applyOptions(pattern, sourceType, runID string, skippedAt time.Time, persistCtx context.Context) (ApplyOptions, error) {
 	pattern = strings.TrimSpace(pattern)
-	opt := ApplyOptions{TownSkipPattern: pattern, SourceType: sourceType}
+	opt := ApplyOptions{
+		TownSkipPattern: pattern,
+		SourceType:      sourceType,
+		RunID:           runID,
+		SkippedAt:       skippedAt,
+		SkippedRowSink: func(rows []domain.SyncSkippedRow) error {
+			return e.runs.CreateSkippedRows(persistCtx, rows)
+		},
+	}
 	if pattern == "" {
 		return opt, nil
 	}
@@ -549,13 +542,6 @@ func persistContext(ctx context.Context) (context.Context, context.CancelFunc) {
 		return ctx, func() {}
 	}
 	return context.WithTimeout(context.Background(), 10*time.Second)
-}
-
-func (e *Engine) attachRunIDAndTime(runID string, createdAt time.Time, rows []domain.SyncSkippedRow) {
-	for i := range rows {
-		rows[i].RunID = runID
-		rows[i].CreatedAt = createdAt
-	}
 }
 
 // monthsWindow 返回从 (now - (n-1) 月) 到 now 的 YYMM 列表，按时间升序。
