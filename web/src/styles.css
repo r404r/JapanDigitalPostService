@@ -536,11 +536,6 @@ label small {
   font-weight: 800;
 }
 
-.skipped-rows-panel {
-  display: grid;
-  gap: 16px;
-}
-
 .skipped-rows-heading {
   display: flex;
   gap: 16px;
@@ -554,6 +549,67 @@ label small {
 
 .skipped-rows-heading .secondary-button {
   flex: 0 0 auto;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(5, 47, 69, 0.46);
+}
+
+.modal-card {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(1120px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow: hidden;
+  border: 1px solid rgba(5, 47, 69, 0.12);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 28px 70px rgba(5, 47, 69, 0.28);
+}
+
+.modal-header {
+  border-bottom: 1px solid rgba(5, 47, 69, 0.1);
+  padding: 20px 20px 16px;
+}
+
+.modal-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 20px;
+}
+
+.modal-footer {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid rgba(5, 47, 69, 0.1);
+  padding: 16px 20px;
+  background: #f8fbfc;
+}
+
+.skipped-rows-modal-body {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+
+.skipped-rows-pagination span {
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.pagination-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .skipped-rows-table {
@@ -702,6 +758,33 @@ th {
   .sync-submit-button {
     width: 100%;
     min-width: 0;
+  }
+
+  .modal-backdrop {
+    align-items: stretch;
+    padding: 12px;
+  }
+
+  .modal-card {
+    width: 100%;
+    max-height: calc(100dvh - 24px);
+  }
+
+  .modal-header,
+  .modal-body,
+  .modal-footer {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  .modal-footer {
+    display: grid;
+    justify-content: stretch;
+  }
+
+  .pagination-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 
   .skipped-rows-heading {

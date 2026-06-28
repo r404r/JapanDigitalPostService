@@ -59,3 +59,4 @@ Squad leader 按依赖逐个分派；backlog 任务不要一次性全部并行�
 | [0028](task-0028-manual-test-container-restart-docs.md) | 手工测试容器配置变更、代码变更与离线构建说明。 |
 | [0029](task-0029-plan-followups.md) | plan 后续修正收口：CI 前端校验与缓存、同步锁 TTL 测试、LIKE 转义测试、DX 文档细节。 |
 | [0030](task-0030-web-import-filter-settings-and-skipped-history.md) | Web 接入导入过滤正则设置与过滤履历明细查看。 |
+| [0031](task-0031-web-skipped-history-modal.md) | Web 将过滤履历明细改为模态窗口与页码式分页。 |

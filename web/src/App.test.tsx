@@ -396,6 +396,7 @@ describe("App", () => {
 
   it("opens skipped row details from sync history and paginates them", async () => {
     sessionStorage.setItem("apiToken", "admin-token");
+    const firstPageRows = Array.from({ length: 100 }, (_, index) => skippedRow(index + 1));
     vi.mocked(fetch)
       .mockResolvedValueOnce(jsonResponse(settingsBody()))
       .mockResolvedValueOnce(
@@ -424,13 +425,15 @@ describe("App", () => {
           }
         ])
       )
-      .mockResolvedValueOnce(jsonResponse(Array.from({ length: 100 }, (_, index) => skippedRow(index + 1))))
-      .mockResolvedValueOnce(jsonResponse([skippedRow(101)]));
+      .mockResolvedValueOnce(jsonResponse(firstPageRows))
+      .mockResolvedValueOnce(jsonResponse([skippedRow(101)]))
+      .mockResolvedValueOnce(jsonResponse(firstPageRows));
 
     render(<App />);
     await userEvent.click(screen.getByRole("button", { name: "管理" }));
 
     await userEvent.click(await screen.findByRole("button", { name: "除外行を表示" }));
+    const dialog = await screen.findByRole("dialog", { name: "除外行明細" });
 
     expect(fetch).toHaveBeenCalledWith(
       "/v1/sync/runs/run-skip/skipped?limit=100&offset=0",
@@ -438,16 +441,17 @@ describe("App", () => {
         headers: expect.any(Headers)
       })
     );
-    expect(await screen.findByText("除外行明細")).toBeInTheDocument();
-    expect(screen.getByText("東京都 / 千代田区 / 除外町域1")).toBeInTheDocument();
-    expect(screen.getAllByText("(?i)町域").length).toBeGreaterThan(0);
-    expect(screen.getByText(/\["raw-row-1","東京都"/)).toBeInTheDocument();
-    expect(screen.queryByText(/raw-tail-1/)).not.toBeInTheDocument();
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    expect(await within(dialog).findByText("東京都 / 千代田区 / 除外町域1")).toBeInTheDocument();
+    expect(within(dialog).getByText("ページ 1 / 2")).toBeInTheDocument();
+    expect(within(dialog).getAllByText("(?i)町域").length).toBeGreaterThan(0);
+    expect(within(dialog).getByText(/\["raw-row-1","東京都"/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/raw-tail-1/)).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getAllByRole("button", { name: "raw を表示" })[0]);
-    expect(screen.getByText(/raw-tail-1/)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getAllByRole("button", { name: "raw を表示" })[0]);
+    expect(within(dialog).getByText(/raw-tail-1/)).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "さらに読み込む" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "次へ" }));
 
     expect(fetch).toHaveBeenCalledWith(
       "/v1/sync/runs/run-skip/skipped?limit=100&offset=100",
@@ -455,8 +459,24 @@ describe("App", () => {
         headers: expect.any(Headers)
       })
     );
-    expect(await screen.findByText("東京都 / 千代田区 / 除外町域101")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "さらに読み込む" })).not.toBeInTheDocument();
+    expect(await within(dialog).findByText("東京都 / 千代田区 / 除外町域101")).toBeInTheDocument();
+    expect(within(dialog).queryByText("東京都 / 千代田区 / 除外町域1")).not.toBeInTheDocument();
+    expect(within(dialog).getByText("ページ 2 / 2")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "次へ" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "前へ" })).toBeEnabled();
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "前へ" }));
+    expect(fetch).toHaveBeenCalledWith(
+      "/v1/sync/runs/run-skip/skipped?limit=100&offset=0",
+      expect.objectContaining({
+        headers: expect.any(Headers)
+      })
+    );
+    expect(await within(dialog).findByText("東京都 / 千代田区 / 除外町域1")).toBeInTheDocument();
+    expect(within(dialog).getByText("ページ 1 / 2")).toBeInTheDocument();
+
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "除外行明細" })).not.toBeInTheDocument();
   });
 
   it("clears skipped row details when the bearer token is removed", async () => {
@@ -494,11 +514,12 @@ describe("App", () => {
     render(<App />);
     await userEvent.click(screen.getByRole("button", { name: "管理" }));
     await userEvent.click(await screen.findByRole("button", { name: "除外行を表示" }));
-    expect(await screen.findByText("東京都 / 千代田区 / 除外町域1")).toBeInTheDocument();
+    const dialog = await screen.findByRole("dialog", { name: "除外行明細" });
+    expect(await within(dialog).findByText("東京都 / 千代田区 / 除外町域1")).toBeInTheDocument();
 
     await userEvent.clear(screen.getByLabelText("Bearer token"));
 
-    expect(screen.queryByText("除外行明細")).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "除外行明細" })).not.toBeInTheDocument();
     expect(screen.queryByText("東京都 / 千代田区 / 除外町域1")).not.toBeInTheDocument();
     expect(screen.getByText("同期履歴はまだありません。")).toBeInTheDocument();
   });
