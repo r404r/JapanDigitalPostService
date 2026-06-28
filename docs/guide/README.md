@@ -107,7 +107,7 @@ Vite 画面默认在 `http://localhost:5173`，并通过 `/v1` 代理到本机 `
 - 浏览器刷新后，持有 token 时会从后端重新读取，不依赖前端内存。
 - `processed` 显示本次处理行数；`error` 显示失败摘要，成功时通常为 `-`。
 
-### 4.1 抓取设置（重试次数 / 全量 URL）
+### 4.1 抓取设置（当前 Web：重试次数 / 全量 URL）
 
 抓取行为可在线配置，**重启后保留**：
 
@@ -124,6 +124,8 @@ Vite 画面默认在 `http://localhost:5173`，并通过 `/v1` 代理到本机 `
 4. 点击「既定値に戻す」后，`download_max_retry` 与 `scrape_full_url` 的覆盖值会被删除，并恢复为默认值。
 
 后端 API：`GET /v1/admin/settings` / `PUT /v1/admin/settings`（均需 `admin` token，契约见 [`docs/api/v1.md`](../api/v1.md)）。
+
+> 现状说明：后端已支持第三个设置项 `town_skip_regex`，用于按町域名正则跳过导入行，并会把跳过明细写入 `sync_skipped_rows`。当前 Web 页面尚未提供该输入框和过滤履历查看入口；Web 接入方案见 [`task-0030`](../tasks/task-0030-web-import-filter-settings-and-skipped-history.md)。在该 task 实施前，可直接调用 Settings API 配置 `town_skip_regex`，并通过 `GET /v1/sync/runs/{id}/skipped` 查看明细。
 
 ### 4.2 文件上传（ファイルアップロード）
 

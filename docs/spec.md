@@ -99,9 +99,9 @@
 
 明文 token 形如 `jdps_<43 字符 base64url>`（256-bit 随机熵）；落库只存 SHA-256 hash 与 8 字符 prefix。发行入参非法（缺 name、未知 scope、`ttl_seconds<=0`、未知字段、非法 JSON）返回 `400 invalid_request`。
 
-### 3.6 运行时抓取设置（admin scope，管理画面可配、重启后保留）
+### 3.6 运行时抓取设置（admin scope，Settings API 可配、重启后保留）
 
-管理画面可在线配置两项抓取行为，覆盖值持久化到 DB（`runtime_settings` 表），重启后保留：
+Settings API 可在线配置抓取/导入行为，覆盖值持久化到 DB（`runtime_settings` 表），重启后保留：
 
 - `GET /v1/admin/settings` → 返回每项的 `value`（当前有效值）、`default`（默认值，恢复默认将回退到此）、`overridden`（是否存在 DB 覆盖）。
 - `PUT /v1/admin/settings` → 部分更新；省略字段不变。body `{ "download_max_retry": 5, "scrape_full_url": "https://…", "town_skip_regex": "^(?:以下に掲載がない場合)$", "reset_to_default": ["scrape_full_url"] }`：列入 `reset_to_default` 的键删除其覆盖值（对应画面「恢复默认」按钮）。同一键不可同时设值与重置（返回 `400`）。
@@ -114,7 +114,7 @@
 
 **优先级**：有效值 = DB 覆盖 > env > 代码默认（详见 architecture §9.1）。
 
-**生效范围与重启后保留**：引擎在**每次同步运行前**解析有效配置（不在启动期冻结），因此管理画面改动无需重启即在三条触发路径生效——进程内调度（`SYNC_CRON`）、手动触发（`POST /v1/sync/trigger`）、独立批处理（`cmd/batch`）。覆盖值持久化于 DB，重启后保留。手工上传同期（WP2）走本地文件重建、不发起网络下载，故 `download_max_retry` / `scrape_full_url` 对上传路径不适用；`town_skip_regex` 对上传与其它导入路径均生效。
+**生效范围与重启后保留**：引擎在**每次同步运行前**解析有效配置（不在启动期冻结），因此 API 改动无需重启即在三条触发路径生效——进程内调度（`SYNC_CRON`）、手动触发（`POST /v1/sync/trigger`）、独立批处理（`cmd/batch`）。覆盖值持久化于 DB，重启后保留。手工上传同期（WP2）走本地文件重建、不发起网络下载，故 `download_max_retry` / `scrape_full_url` 对上传路径不适用；`town_skip_regex` 对上传与其它导入路径均生效。React sample 管理页对 `town_skip_regex` 与过滤明细的接入见 `docs/tasks/task-0030-web-import-filter-settings-and-skipped-history.md`，完成前可直接调用 Settings API。
 
 ## 4. 同步行为规格（task-0004 已实现）
 
@@ -188,7 +188,7 @@
 
 三个页面（最小可用）：
 1. **查询页**：输入邮编/都道府県/市区町村/关键字，展示结果表、OpenAPI 字段 `total_count` / `returned_count` / `items`，并可展示 `items.length` 作为本次返回地址数量；同时展示 `truncated`/`too_many_results`/`timeout` 状态提示。
-2. **同步状态页**：持有 Bearer token 时自动读取同步状态与运行历史；展示 `total_addresses`、最近成功同步时间/类型、是否运行中、最新 100 件运行历史（类型、状态、时间、`rows_total` 处理数量、错误摘要），可手动触发 auto/full/diff（admin）。清空 token 时同步状态与历史显示应一并清空，避免保留旧 token 读取到的信息。管理区 UI 将“状态再読込”和“同期実行”分成两个操作区域；`同期方式` 下拉框只影响其同组的「選択した方式で同期実行」按钮，状态再读取不受该选择影响。
+2. **同步状态页**：持有 Bearer token 时自动读取同步状态与运行历史；展示 `total_addresses`、最近一次成功同步时间/类型、是否运行中、最新 100 件运行历史（类型、状态、时间、`rows_total` 处理数量、错误摘要），可手动触发 auto/full/diff（admin）。清空 token 时同步状态与历史显示应一并清空，避免保留旧 token 读取到的信息。管理区 UI 将“状态再読込”和“同期実行”分成两个操作区域；`同期方式` 下拉框只影响其同组的「選択した方式で同期実行」按钮，状态再读取不受该选择影响。导入过滤正则设置与 `rows_skipped` 明细查看属于 task-0030 的前端待实施范围，后端 API 已就位。
 3. **Token 页**：发行 token（明文仅展示一次并提示保存）、脱敏列表、吊销（需 admin）。Token 管理表单将输入控件与操作按钮分为独立视觉/语义组，按钮区与输入区保持清晰间距。
 
 通用行为：
@@ -263,3 +263,4 @@
 | 2026-06-12 | GHO-40 | 强化 task 收口制度：文档影响判定纳入 `docs/guide/`，单元测试制度明确 Given/When/Then、mock/fake/stub、公开行为与新增/变更代码测试要求；新增 `make regression-report` 与 `output/regression-report.txt` 纯文本回归/覆盖率摘要管道。无 OpenAPI 变更。 |
 | 2026-06-12 | GHO-41 (WP1) | 新增运行时抓取设置持久化与管理 API：`runtime_settings` 表（三方言 GORM AutoMigrate + `migrations/0002_*`），`download_max_retry`（默认 3，0–10）与 `scrape_full_url`（默认=当前全量 URL，https+日本邮便域名白名单 SSRF 校验、日语提示）可在管理画面配置且重启后保留；新增 `GET/PUT /v1/admin/settings`（admin），「恢复默认」用删除覆盖语义。引擎/fetcher 改为每次同步前解析有效配置（DB>env>默认，§3.6 / architecture §9.1），batch/手动触发/调度三路径无需重启即生效；上传路径不发起下载、不受影响。OpenAPI 增补 `/admin/settings` 与 `AdminSettings`/`AdminSettingsUpdate` schema。 |
 | 2026-06-25 | GHO-97 | React sample 支持后端 `PAYLOAD_ENCRYPTION=aes-gcm`：页面新增 `API 暗号化 key`（sessionStorage），前端按 `X-Payload-Encryption: AES-256-GCM` 响应头解密 AES-GCM 信封后再解析业务 JSON；缺失/错误 key 显示明确错误。后端 API 契约沿用 §6 信封，无需新增端点。 |
+| 2026-06-28 | task-0030-plan | 规划 React sample 接入 `town_skip_regex` 与过滤履历明细；澄清 §3.6 当前由 Settings API 支持，Web 管理页接入为 task-0030 待实施，避免把后端能力误写为前端已完成。 |

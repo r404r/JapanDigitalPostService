@@ -123,7 +123,7 @@
 `sync_locks`（单行，DB 级互斥）或 Postgres advisory lock / `SELECT ... FOR UPDATE`，防止多实例并发同步。SQLite 单实例可降级为进程内 mutex。
 
 ### 4.5 运行时设置 `runtime_settings`
-管理画面可配置、重启后保留的运行时覆盖值（GHO-41 WP1）。键值表 `runtime_settings(key PK, value, updated_at)`，只存“覆盖”——未被设置的键无行，有效值回退到 env / 代码默认。当前键：`download_max_retry`、`scrape_full_url`。“恢复默认”即删除对应行。仓储经 `domain.SettingsRepository` 隔离，`internal/settings.Service` 在其上叠加默认值解析与输入校验（SSRF / 范围）。表由 GORM AutoMigrate 三方言建立，并有 `migrations/0002_runtime_settings.*.sql` 对应生产显式迁移。
+运行时可配置、重启后保留的覆盖值（GHO-41 WP1 / GHO-125）。键值表 `runtime_settings(key PK, value, updated_at)`，只存“覆盖”——未被设置的键无行，有效值回退到 env / 代码默认。当前键：`download_max_retry`、`scrape_full_url`、`town_skip_regex`。“恢复默认”即删除对应行。仓储经 `domain.SettingsRepository` 隔离，`internal/settings.Service` 在其上叠加默认值解析与输入校验（SSRF / 范围 / 正则合法性）。表由 GORM AutoMigrate 三方言建立，并有 `migrations/0002_runtime_settings.*.sql` 与 `migrations/0003_sync_skipped_rows.*.sql` 对应生产显式迁移；`town_skip_regex` 匹配的导入行记录在 `sync_skipped_rows`。
 
 ## 5. 批处理同步引擎
 
@@ -206,6 +206,7 @@
 | `SYNC_CRON` | `0 3 * * *` | 同步频率 |
 | `SYNC_LOCK_RELEASE_TIMEOUT` | `5s` | 同步锁释放 DB 操作超时 |
 | `SYNC_FULL_URL` | 官网全量 zip | 全量数据源（基线默认；可被管理画面 `scrape_full_url` 的 DB 覆盖在线改写） |
+| `SYNC_TOWN_SKIP_REGEX` | 空 | 町域名导入跳过正则的基线默认；可被 `town_skip_regex` 的 DB 覆盖在线改写 |
 | `DOWNLOAD_TIMEOUT` / `DOWNLOAD_MAX_RETRY` / `DOWNLOAD_RETRY_BACKOFF` | `60s` / `3` / `1s` | 下载超时/重试/退避（`DOWNLOAD_MAX_RETRY` 为基线默认；可被管理画面 `download_max_retry` 的 DB 覆盖在线改写） |
 | `QUERY_TIMEOUT` | `2s` | 查询超时 |
 | `FUZZY_LIMIT` / `MAX_TOTAL` | `20` / `1000` | 模糊上限 / 过多阈值 |
@@ -215,13 +216,13 @@
 | `PAYLOAD_ENC_KEY_ID` | — | 可选密钥标识，便于轮换 |
 
 ### 9.1 运行时设置优先级（env / DB / 默认）
-部分抓取行为既可由环境变量配置，又可在管理画面在线配置并持久化（`runtime_settings`，§4.5）。有效值按 **DB 覆盖 > env > 代码默认** 解析：
+部分抓取/导入行为既可由环境变量配置，又可经 `GET/PUT /v1/admin/settings` 在线配置并持久化（`runtime_settings`，§4.5）。有效值按 **DB 覆盖 > env > 代码默认** 解析：
 
-- **代码默认**：`download_max_retry=3`、`scrape_full_url=`（`SYNC_FULL_URL` 的代码常量，即官网全量 URL）。
-- **env**：`DOWNLOAD_MAX_RETRY` / `SYNC_FULL_URL` 若设置，则作为该项的“基线默认”（即 `default`，也是“恢复默认”回退到的值）。
+- **代码默认**：`download_max_retry=3`、`scrape_full_url=`（`SYNC_FULL_URL` 的代码常量，即官网全量 URL）、`town_skip_regex=`（关闭过滤）。
+- **env**：`DOWNLOAD_MAX_RETRY` / `SYNC_FULL_URL` / `SYNC_TOWN_SKIP_REGEX` 若设置，则作为该项的“基线默认”（即 `default`，也是“恢复默认”回退到的值）。
 - **DB 覆盖**：管理画面 `PUT /v1/admin/settings` 写入的值，优先级最高，重启后保留。“恢复默认”删除覆盖行，有效值回到 env-or-默认。
 
-引擎在**每次同步运行前**调用 `settings.Service` 解析有效值（`internal/sync.Engine.UseSettingsResolver`），并把有效全量 URL 与下载重试注入本次运行的 fetcher，避免在进程启动期把配置冻死。三条触发路径（进程内调度、`POST /v1/sync/trigger`、`cmd/batch`）共用同一引擎与解析器，行为一致。解析失败时降级到构造期静态配置，不打断同步。
+引擎在**每次同步运行前**调用 `settings.Service` 解析有效值（`internal/sync.Engine.UseSettingsResolver`），并把有效全量 URL、下载重试次数与町域名过滤正则注入本次运行，避免在进程启动期把配置冻死。三条触发路径（进程内调度、`POST /v1/sync/trigger`、`cmd/batch`）以及上传导入共用同一解析器；上传不发起下载，但会应用 `town_skip_regex`。解析失败时降级到构造期静态配置，不打断同步。
 
 ## 10. 部署与运维
 
@@ -229,7 +230,7 @@
 - `deployments/manual-test.compose.yml`：全功能手工测试环境，一条命令构建并启动 Go API、React 生产构建页面、PG/MySQL 内置服务；数据库方言仅通过 `deployments/manual-test.env` 的 `DB_DRIVER` / `DB_DSN` 切换。默认 SQLite 数据持久化在 `app-data` volume，PG/MySQL 分别持久化在 `manual-pgdata` / `manual-mysqldata`。
 - 健康检查 `GET /v1/health`（liveness/readiness）。
 - 日志结构化（slog），关键事件：同步开始/结束/失败、token 校验失败、查询超时。
-- 迁移：开发用 GORM AutoMigrate；生产建议显式 migration（`migrations/`，可移植 SQL）。当前含 `0001_init.*`（addresses/tokens/sync_runs/sync_locks）与 `0002_runtime_settings.*`（运行时设置，§4.5），三方言分文件。
+- 迁移：开发用 GORM AutoMigrate；生产建议显式 migration（`migrations/`，可移植 SQL）。当前含 `0001_init.*`（addresses/tokens/sync_runs/sync_locks）、`0002_runtime_settings.*`（运行时设置，§4.5）与 `0003_sync_skipped_rows.*`（过滤行审计与 `rows_skipped`），三方言分文件。
 
 ## 11. 目录结构
 

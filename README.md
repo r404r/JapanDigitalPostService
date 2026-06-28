@@ -19,7 +19,7 @@
 - **同步**：`utf_ken_all` 全量/差分引擎（幂等、进程内 cron 调度、DB 锁、保守 fallback），`cmd/batch` 独立入口，HTTP 手动触发（`POST /v1/sync/trigger`，支持 `auto|full|diff`，异步执行）。
 - **API**：地址查询（超时/上限/截断状态）、同步状态/历史、token 发行/管理、运行时抓取设置（`GET/PUT /v1/admin/settings`，admin）。全部数据端点已接入**真实 Bearer 鉴权**（read/admin scope，`/v1/health` 公开），可选 AES-256-GCM 载荷加密。
 - **运行时设置**：抓取重试次数（`download_max_retry`，默认 3）、全量 URL（`scrape_full_url`）与町域名跳过正则（`town_skip_regex`）可在线配置、持久化重启后保留（DB 覆盖 > env > 默认）；URL 校验含 SSRF 防护，正则写入前校验，引擎每次同步前解析，无需重启即生效。
-- **前端**（`web/`，Vite + React + TS）：地址查询页 + 后台管理区（触发同步 自动/强制全量/强制差分、同步状态与历史、token 发行/管理）。
+- **前端**（`web/`，Vite + React + TS）：地址查询页 + 后台管理区（触发同步 自动/强制全量/强制差分、同步状态与历史、token 发行/管理）。导入过滤正则与过滤履历明细的 Web 接入见 `docs/tasks/task-0030-web-import-filter-settings-and-skipped-history.md`。
 - **质量**：单元/集成/端到端测试、边界 fixture、CI（fmt/vet/build/test + 多方言矩阵 + OpenAPI 校验 + 灵魂文件一致性）。
 
 ## 快速开始
@@ -175,6 +175,8 @@ npm run dev --prefix web     # http://localhost:5173（dev server 代理后端 :
 
 画面包含：地址查询页（read token），后台管理区——触发同步（自动 / 强制全量 / 强制差分）、
 同步状态与历史、token 发行/管理（admin token）。明文 token 仅创建时展示一次，前端只存于 sessionStorage。
+后端已支持 `town_skip_regex` 与过滤履历 API；当前 Web 页面尚未接入，具体追加方案见
+[`task-0030`](docs/tasks/task-0030-web-import-filter-settings-and-skipped-history.md)。
 当后端以 `PAYLOAD_ENCRYPTION=aes-gcm` 启动时，页面右上角的 `API 暗号化 key` 输入框填写同一个
 base64(32B) `PAYLOAD_ENC_KEY`，前端会按 `X-Payload-Encryption: AES-256-GCM` 响应头自动解密 JSON 信封；
 该 key 同样只保存在当前浏览器 `sessionStorage`。
