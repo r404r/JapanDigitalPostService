@@ -61,3 +61,4 @@ Squad leader 按依赖逐个分派；backlog 任务不要一次性全部并行�
 | [0030](task-0030-web-import-filter-settings-and-skipped-history.md) | Web 接入导入过滤正则设置与过滤履历明细查看。 |
 | [0031](task-0031-web-skipped-history-modal.md) | Web 将过滤履历明细改为模态窗口与页码式分页。 |
 | [0032](task-0032-web-sync-history-pagination.md) | Web 同步履歴每页 6 行分页，并调整 skipped 照会入口。 |
+| [0033](task-0033-readme-i18n.md) | README 三语化：日文默认版、中文保留版、英文版与后续三语维护规则。 |
