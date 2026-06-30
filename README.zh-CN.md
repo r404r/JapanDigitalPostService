@@ -302,6 +302,12 @@ make test-multidialect                                    # 对真实 PG/MySQL �
 - 前端测试：`npm run test --prefix web`（vitest）。
 - CI（`.github/workflows/ci.yml`）：Go fmt/vet/build/test + PG/MySQL 多方言矩阵 + 灵魂文件一致 + OpenAPI 校验。
 
+## 许可证
+
+本仓库的源代码与项目文档采用 [Apache License 2.0](LICENSE) 授权，copyright holder 为 `r404r`。额外署名与数据源边界见 [`NOTICE`](NOTICE)。
+
+日本邮政邮编数据由日本邮政提供，属于第三方数据源，本仓库不对该数据进行再授权。下载或使用该数据时，请由使用者自行确认日本邮政的条件与适用法律要求。
+
 ## 技术栈
 
 Go + `net/http`（标准库路由）· GORM（PostgreSQL / MySQL / SQLite）· robfig/cron · 可选 AES-256-GCM 载荷加密 · React (Vite + TypeScript) sample 前端（`web/`）。

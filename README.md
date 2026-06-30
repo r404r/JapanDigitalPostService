@@ -297,6 +297,12 @@ make test-multidialect                                    # 実 PostgreSQL/MySQL
 - フロントエンドテスト: `npm run test --prefix web`（vitest）。
 - CI（`.github/workflows/ci.yml`）: Go fmt/vet/build/test + PG/MySQL 複数方言 matrix + soul file 一致 + OpenAPI 検証。
 
+## ライセンス
+
+本リポジトリのソースコードとプロジェクトドキュメントは [Apache License 2.0](LICENSE) で提供されます。著作権者は `r404r` です。追加の attribution とデータソース境界は [`NOTICE`](NOTICE) を参照してください。
+
+日本郵便の郵便番号データは日本郵便が提供する第三者データであり、本リポジトリはそのデータを再ライセンスしません。ダウンロードまたは利用時は、日本郵便の条件と適用法令を利用者側で確認してください。
+
 ## 技術スタック
 
 Go + `net/http`（標準ライブラリ router）· GORM（PostgreSQL / MySQL / SQLite）· robfig/cron · 任意の AES-256-GCM ペイロード暗号化 · React (Vite + TypeScript) sample frontend（`web/`）。

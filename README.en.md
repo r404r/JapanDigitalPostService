@@ -297,6 +297,12 @@ make test-multidialect                                    # run store integratio
 - Frontend tests: `npm run test --prefix web` (vitest).
 - CI (`.github/workflows/ci.yml`): Go fmt/vet/build/test + PG/MySQL multi-dialect matrix + soul-file consistency + OpenAPI validation.
 
+## License
+
+This repository's source code and project documentation are licensed under the [Apache License 2.0](LICENSE). The copyright holder is `r404r`. See [`NOTICE`](NOTICE) for additional attribution and data-source boundaries.
+
+Japan Post postal-code data is third-party data provided by Japan Post and is not sublicensed by this repository. Users are responsible for confirming Japan Post's terms and applicable legal requirements before downloading or using that data.
+
 ## Tech Stack
 
 Go + `net/http` (standard-library router) · GORM (PostgreSQL / MySQL / SQLite) · robfig/cron · optional AES-256-GCM payload encryption · React (Vite + TypeScript) sample frontend (`web/`).

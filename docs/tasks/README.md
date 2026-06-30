@@ -62,3 +62,4 @@ Squad leader 按依赖逐个分派；backlog 任务不要一次性全部并行�
 | [0031](task-0031-web-skipped-history-modal.md) | Web 将过滤履历明细改为模态窗口与页码式分页。 |
 | [0032](task-0032-web-sync-history-pagination.md) | Web 同步履歴每页 6 行分页，并调整 skipped 照会入口。 |
 | [0033](task-0033-readme-i18n.md) | README 三语化：日文默认版、中文保留版、英文版与后续三语维护规则。 |
+| [0034](task-0034-apache-license.md) | Apache-2.0 授权落地：LICENSE、NOTICE、README 三语许可证说明与前端包元数据。 |
