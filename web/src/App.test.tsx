@@ -151,6 +151,16 @@ describe("App", () => {
     );
   });
 
+  it("shows a local validation message when searching without conditions", async () => {
+    sessionStorage.setItem("apiToken", "read-token");
+
+    render(<App />);
+    await userEvent.click(screen.getByRole("button", { name: "検索実行" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("検索条件を1つ以上入力してください。");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("decrypts encrypted API responses after configuring the AES-GCM key", async () => {
     sessionStorage.setItem("apiToken", "read-token");
     vi.mocked(fetch).mockResolvedValueOnce(

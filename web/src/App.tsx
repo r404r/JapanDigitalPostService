@@ -101,6 +101,13 @@ function SearchPage({ api, hasToken }: { api: ApiClient; hasToken: boolean }) {
     event.preventDefault();
     setError(null);
     setResult(null);
+    if (!Object.values(form).some((value) => value.trim())) {
+      setError({
+        status: "invalid_request",
+        message: "検索条件を1つ以上入力してください。"
+      });
+      return;
+    }
     setLoading(true);
     try {
       setResult(await api.searchAddresses(form));

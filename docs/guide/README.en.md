@@ -70,6 +70,7 @@ Meaning of the result area:
 
 Status messages:
 
+- `検索条件を1つ以上入力してください。`: No search condition was entered. Enter at least one of postal code, prefecture, city/ward/town/village, or keyword.
 - `too_many_results`: The conditions are too broad and exceed the server threshold. Narrow the search conditions.
 - `timeout`: The query exceeded the time limit. Narrow the search conditions or check backend load.
 - `0 件`: The request succeeded, but no matching address was found.
