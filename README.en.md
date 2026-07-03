@@ -9,7 +9,7 @@ Japan Post address lookup service: periodically synchronizes postal-code data an
 - Architecture: [`docs/architecture.md`](docs/architecture.md)
 - Functional spec: [`docs/spec.md`](docs/spec.md)
 - API docs: [`docs/api/`](docs/api/) (human-readable) / [`api/openapi.yaml`](api/openapi.yaml) (OpenAPI contract source)
-- UI guide: [`docs/guide/`](docs/guide/)
+- UI guide: [`docs/guide/README.en.md`](docs/guide/README.en.md)
 - Task breakdown: [`docs/tasks/`](docs/tasks/) (including the [index](docs/tasks/README.md))
 - Agent working agreement: [`AGENTS.md`](AGENTS.md) / [`CLAUDE.md`](CLAUDE.md) (same content)
 
@@ -176,7 +176,7 @@ The UI includes an address search page (read token) and an admin area for trigge
 Plaintext tokens are displayed only at creation time and stored by the frontend only in `sessionStorage`.
 When the backend starts with `PAYLOAD_ENCRYPTION=aes-gcm`, enter the same base64(32B) `PAYLOAD_ENC_KEY` in the top-right `API 暗号化 key` field. The frontend automatically decrypts JSON envelopes when the response has `X-Payload-Encryption: AES-256-GCM`.
 That key is also stored only in the current browser `sessionStorage`.
-For screenshot-based operating instructions, see [`docs/guide/`](docs/guide/).
+For screenshot-based operating instructions, see [`docs/guide/README.en.md`](docs/guide/README.en.md).
 
 ### 6. Full Manual Test (Container)
 

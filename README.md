@@ -9,7 +9,7 @@
 - アーキテクチャ設計: [`docs/architecture.md`](docs/architecture.md)
 - 機能仕様: [`docs/spec.md`](docs/spec.md)
 - API ドキュメント: [`docs/api/`](docs/api/)（人が読む版） / [`api/openapi.yaml`](api/openapi.yaml)（OpenAPI 契約ソース）
-- UI 利用ガイド: [`docs/guide/`](docs/guide/)
+- UI 利用ガイド: [`docs/guide/README.ja.md`](docs/guide/README.ja.md)
 - タスク分解: [`docs/tasks/`](docs/tasks/)（[索引](docs/tasks/README.md) を含む）
 - Agent 作業規約: [`AGENTS.md`](AGENTS.md) / [`CLAUDE.md`](CLAUDE.md)（同一内容）
 
@@ -176,7 +176,7 @@ npm run dev --prefix web     # http://localhost:5173（dev server が backend :8
 平文 token は作成時に一度だけ表示され、フロントエンドでは `sessionStorage` のみに保存されます。
 backend を `PAYLOAD_ENCRYPTION=aes-gcm` で起動した場合、画面右上の `API 暗号化 key` 入力欄に同じ base64(32B) の `PAYLOAD_ENC_KEY` を入力してください。フロントエンドは `X-Payload-Encryption: AES-256-GCM` response header に従って JSON envelope を自動復号します。
 この key も現在のブラウザの `sessionStorage` のみに保存されます。
-スクリーンショット付きの操作説明は [`docs/guide/`](docs/guide/) を参照してください。
+スクリーンショット付きの操作説明は [`docs/guide/README.ja.md`](docs/guide/README.ja.md) を参照してください。
 
 ### 6. 全機能手動テスト（コンテナ）
 
