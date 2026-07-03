@@ -110,6 +110,9 @@ ADMIN_BOOTSTRAP_TOKEN=jdps_local_admin_example_token make run
 
 ```dotenv
 ADMIN_BOOTSTRAP_TOKEN=jdps_manual_admin_token
+PAYLOAD_ENCRYPTION=aes-gcm
+PAYLOAD_ENC_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+PAYLOAD_ENC_KEY_ID=manual-test
 ```
 
 そのため、`deployments/manual-test.compose.yml` で起動した後、画面の `Bearer token` 入力欄には次を直接入力できます。
@@ -117,6 +120,8 @@ ADMIN_BOOTSTRAP_TOKEN=jdps_manual_admin_token
 ```text
 jdps_manual_admin_token
 ```
+
+画面右上の `API 暗号化 key` 入力欄には同じ `PAYLOAD_ENC_KEY` を入力し、AES-256-GCM レスポンス復号を手動確認します。
 
 新しい read token を生成します。
 
@@ -190,6 +195,7 @@ docker compose -f deployments/manual-test.compose.yml up -d --build
 
 - 既定は SQLite です。`DB_DRIVER=sqlite`、DB file は Docker volume `app-data` の `/data/manual-test.db` に永続化されます。
 - 既定 bootstrap admin token は `jdps_manual_admin_token` です。ローカル手動テスト専用で、本番には使わないでください。
+- 既定で AES-GCM response encryption が有効です。`PAYLOAD_ENCRYPTION=aes-gcm`、画面の `API 暗号化 key` には `manual-test.env` の `PAYLOAD_ENC_KEY` を入力してください。
 - 既定で `SEED_SAMPLE_DATA=true` なので、初回起動直後に画面からサンプルデータを検索できます。実データが必要な場合は、管理ページで admin token を使い `auto`/`full` 同期をトリガーしてください。
 - フロントエンドは同一 origin の `/v1` で backend を呼び出すため、追加の API base 設定は不要です。
 

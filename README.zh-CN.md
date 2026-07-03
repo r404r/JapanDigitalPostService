@@ -113,6 +113,9 @@ ADMIN_BOOTSTRAP_TOKEN=jdps_local_admin_example_token make run
 
 ```dotenv
 ADMIN_BOOTSTRAP_TOKEN=jdps_manual_admin_token
+PAYLOAD_ENCRYPTION=aes-gcm
+PAYLOAD_ENC_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+PAYLOAD_ENC_KEY_ID=manual-test
 ```
 
 因此，用 `deployments/manual-test.compose.yml` 启动后，页面的 `Bearer token` 输入框可以直接填：
@@ -120,6 +123,8 @@ ADMIN_BOOTSTRAP_TOKEN=jdps_manual_admin_token
 ```text
 jdps_manual_admin_token
 ```
+
+页面右上角的 `API 暗号化 key` 输入框填写同一个 `PAYLOAD_ENC_KEY`，用于手工验证 AES-256-GCM 响应解密。
 
 生成新的 read token：
 
@@ -195,6 +200,7 @@ docker compose -f deployments/manual-test.compose.yml up -d --build
 
 - 默认使用 SQLite：`DB_DRIVER=sqlite`，数据库文件持久化在 Docker volume `app-data` 的 `/data/manual-test.db`。
 - 默认引导 admin token：`jdps_manual_admin_token`，仅限本地手工测试，不要用于生产。
+- 默认启用 AES-GCM 响应加密：`PAYLOAD_ENCRYPTION=aes-gcm`，页面 `API 暗号化 key` 填写 `manual-test.env` 中的 `PAYLOAD_ENC_KEY`。
 - 默认 `SEED_SAMPLE_DATA=true`，首次启动即可用画面查询示例数据；需要真实邮编数据时，可在管理页用 admin token 触发 `auto`/`full` 同步。
 - 前端以同源 `/v1` 调用后端，不需要额外配置 API base。
 

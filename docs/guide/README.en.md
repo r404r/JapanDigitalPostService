@@ -20,7 +20,15 @@ jdps_manual_admin_token
 
 Enter only the token value in the `Bearer token` field in the top-right corner. Do not enter the `Bearer ` prefix. The frontend stores the token only in the browser's `sessionStorage`, so it must be entered again after that browser session is closed.
 
-If the backend is started with `PAYLOAD_ENCRYPTION=aes-gcm`, enter the same base64(32B) `PAYLOAD_ENC_KEY` in the `API 暗号化 key` field in the top-right corner. When the response header is `X-Payload-Encryption: AES-256-GCM`, the frontend automatically decrypts the JSON envelope. This key is also stored only in the current browser `sessionStorage`. With the default `PAYLOAD_ENCRYPTION=none`, this field can be left empty.
+The current `deployments/manual-test.env` enables application-layer response encryption for AES-GCM manual testing:
+
+```text
+PAYLOAD_ENCRYPTION=aes-gcm
+PAYLOAD_ENC_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+PAYLOAD_ENC_KEY_ID=manual-test
+```
+
+Enter the same base64(32B) `PAYLOAD_ENC_KEY` in the `API 暗号化 key` field in the top-right corner. When the response header is `X-Payload-Encryption: AES-256-GCM`, the frontend automatically decrypts the JSON envelope. This key is also stored only in the current browser `sessionStorage`. If the backend is changed back to `PAYLOAD_ENCRYPTION=none`, this field can be left empty.
 
 For frontend development, Vite can also be started separately:
 

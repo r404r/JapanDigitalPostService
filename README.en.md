@@ -110,6 +110,9 @@ The full manual-test container already sets a default in `deployments/manual-tes
 
 ```dotenv
 ADMIN_BOOTSTRAP_TOKEN=jdps_manual_admin_token
+PAYLOAD_ENCRYPTION=aes-gcm
+PAYLOAD_ENC_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+PAYLOAD_ENC_KEY_ID=manual-test
 ```
 
 After starting with `deployments/manual-test.compose.yml`, you can enter this value directly in the UI's `Bearer token` field:
@@ -117,6 +120,8 @@ After starting with `deployments/manual-test.compose.yml`, you can enter this va
 ```text
 jdps_manual_admin_token
 ```
+
+Enter the same `PAYLOAD_ENC_KEY` in the top-right `API 暗号化 key` field to manually verify AES-256-GCM response decryption.
 
 Generate a new read token:
 
@@ -190,6 +195,7 @@ Open `http://localhost:8080` in the browser. Defaults are in `deployments/manual
 
 - SQLite is used by default: `DB_DRIVER=sqlite`, with the database file persisted in the Docker volume `app-data` at `/data/manual-test.db`.
 - The default bootstrap admin token is `jdps_manual_admin_token`. It is for local manual testing only; do not use it in production.
+- AES-GCM response encryption is enabled by default: `PAYLOAD_ENCRYPTION=aes-gcm`; enter the `PAYLOAD_ENC_KEY` from `manual-test.env` in the UI's `API 暗号化 key` field.
 - `SEED_SAMPLE_DATA=true` is enabled by default, so sample data is queryable immediately after first startup. To use real postal-code data, trigger `auto`/`full` sync from the admin page with an admin token.
 - The frontend calls the backend through same-origin `/v1`; no extra API base configuration is needed.
 

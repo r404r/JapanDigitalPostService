@@ -20,9 +20,17 @@ jdps_manual_admin_token
 
 页面右上角的 `Bearer token` 输入框只填写 token 本体，不填写 `Bearer ` 前缀。前端只把 token 保存在浏览器 `sessionStorage`，关闭该浏览器会话后需要重新输入。
 
-如果后端以 `PAYLOAD_ENCRYPTION=aes-gcm` 启动，页面右上角的 `API 暗号化 key` 输入框需要填写同一个
-base64(32B) `PAYLOAD_ENC_KEY`。前端会在响应头为 `X-Payload-Encryption: AES-256-GCM` 时自动解密 JSON
-信封；该 key 也只保存在当前浏览器 `sessionStorage`。默认 `PAYLOAD_ENCRYPTION=none` 时此输入框可留空。
+当前 `deployments/manual-test.env` 为 AES-GCM 手工测试开启了应用层响应加密：
+
+```text
+PAYLOAD_ENCRYPTION=aes-gcm
+PAYLOAD_ENC_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+PAYLOAD_ENC_KEY_ID=manual-test
+```
+
+页面右上角的 `API 暗号化 key` 输入框需要填写同一个 base64(32B) `PAYLOAD_ENC_KEY`。前端会在响应头为
+`X-Payload-Encryption: AES-256-GCM` 时自动解密 JSON 信封；该 key 也只保存在当前浏览器 `sessionStorage`。
+如果后端改回 `PAYLOAD_ENCRYPTION=none`，此输入框可留空。
 
 开发前端时也可以单独启动 Vite：
 

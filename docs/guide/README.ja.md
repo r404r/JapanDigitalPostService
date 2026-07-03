@@ -20,7 +20,15 @@ jdps_manual_admin_token
 
 画面右上の `Bearer token` 入力欄には token 本体だけを入力し、`Bearer ` プレフィックスは入力しません。フロントエンドは token をブラウザーの `sessionStorage` にのみ保存するため、そのブラウザーセッションを閉じた後は再入力が必要です。
 
-バックエンドを `PAYLOAD_ENCRYPTION=aes-gcm` で起動している場合、画面右上の `API 暗号化 key` 入力欄に同じ base64(32B) `PAYLOAD_ENC_KEY` を入力します。フロントエンドはレスポンスヘッダーが `X-Payload-Encryption: AES-256-GCM` のとき、JSON エンベロープを自動的に復号します。この key も現在のブラウザーの `sessionStorage` にのみ保存されます。既定の `PAYLOAD_ENCRYPTION=none` では、この入力欄は空のままで構いません。
+現在の `deployments/manual-test.env` では、AES-GCM 手動テスト用にアプリケーション層レスポンス暗号化を有効にしています。
+
+```text
+PAYLOAD_ENCRYPTION=aes-gcm
+PAYLOAD_ENC_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+PAYLOAD_ENC_KEY_ID=manual-test
+```
+
+画面右上の `API 暗号化 key` 入力欄には、同じ base64(32B) `PAYLOAD_ENC_KEY` を入力します。フロントエンドはレスポンスヘッダーが `X-Payload-Encryption: AES-256-GCM` のとき、JSON エンベロープを自動的に復号します。この key も現在のブラウザーの `sessionStorage` にのみ保存されます。バックエンドを `PAYLOAD_ENCRYPTION=none` に戻した場合、この入力欄は空のままで構いません。
 
 フロントエンド開発時は、Vite だけを個別に起動することもできます。
 

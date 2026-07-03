@@ -64,3 +64,4 @@ Squad leader 按依赖逐个分派；backlog 任务不要一次性全部并行�
 | [0033](task-0033-readme-i18n.md) | README 三语化：日文默认版、中文保留版、英文版与后续三语维护规则。 |
 | [0034](task-0034-apache-license.md) | Apache-2.0 授权落地：LICENSE、NOTICE、README 三语许可证说明与前端包元数据。 |
 | [0035](task-0035-guide-i18n.md) | UI 使用手册三语化：基于中文 guide 新增日文版与英文版，并同步 README 入口。 |
+| [0036](task-0036-manual-test-aes-gcm.md) | 手工测试环境切换到 AES-GCM 响应加密，并刷新本地容器。 |
